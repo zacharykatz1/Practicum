@@ -1,0 +1,832 @@
+---
+title: "Data Generation"
+author: "Zachary Katz (UNI: zak2132)"
+date: "2023-02-12"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+# Load packages
+library(tidyverse)
+library(MASS)
+# library(corrplot)
+library(faux)
+# library(glmnet)
+# library(rsample)
+# library(caret)
+# library(earth)
+# library(BART)
+# library(ranger)
+# library(mgcv)
+# library(SuperLearner)
+# library(qgcomp)
+# library(grf)
+# library(amc)
+# library(remotes)
+# library(tmleCommunity) # Still in beta testing
+# library(bkmr)
+# library(patchwork)
+
+# To avoid annoying message
+options(dplyr.summarise.inform = FALSE)
+```
+
+# Generate data
+
+```{r}
+# Data simulation function
+
+data_simulation = function(scenario, N = 1000) {
+  
+  # Scenario 1: baseline (simple exposures, simple confounding)
+  if (scenario == 1){
+    
+    # Simulate 15 normally distributed variables: 10 exposures and 5 confounders
+    correlated_vars = rnorm_multi(
+      n = N,
+      mu = rep(x = 1, 15),
+      sd = rep(x = 0.2, 15),
+      r = 0.25,
+      varnames = c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "C1", "C2", "C3", "C4", "C5"),
+      empirical = FALSE
+    ) 
+    
+    sim_df = data.frame(correlated_vars)
+    colnames(sim_df[, 1:10]) = paste("exposure_", 1:10, sep = "") 
+    colnames(sim_df[, 11:15]) = paste("confounder_", 1:5, sep = "")
+    
+    # Simulate linear effect from two exposures (M1, M5) and five confounders (C1, C2, C3, C4, C5)
+    hfunY = function(z) h_fun_Y(z, ind1 = 1, ind2 = 5, ind3 = 11, ind4 = 12, ind5 = 13, ind6 = 14, ind7 = 15) 
+    h_fun_Y = function(z, ind1, ind2, ind3, ind4, ind5, ind6, ind7) {
+      
+      0.25*z[ind1] + 0.25*z[ind2] + 0.1*z[ind3] + 0.1*z[ind4] + 0.1*z[ind5] + 0.1*z[ind6] + 0.1*z[ind7]
+      
+    }
+    
+    sim_df$hY = apply(sim_df, 1, hfunY) 
+    
+    # Add noise
+    epsY = rnorm(N, mean = 1, sd = 0.2)
+    sim_df$Y = with(sim_df, hY + epsY)
+    
+    # Remove unused columns
+    sim_df = sim_df %>% 
+      dplyr::select(-hY)
+    
+    # Return simulated data
+    return(sim_df)
+    
+  }
+
+  # Scenario 2: complex exposures (nonlinear / interactions), simple confounding
+  if (scenario == 2) {
+
+    # Simulate 15 normally distributed variables: 10 exposures and 5 confounders
+    correlated_vars = rnorm_multi(
+      n = N,
+      mu = rep(x = 1, 15),
+      sd = rep(x = 0.2, 15),
+      r = 0.25,
+      varnames = c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "C1", "C2", "C3", "C4", "C5"),
+      empirical = FALSE
+    ) 
+    
+    sim_df = data.frame(correlated_vars)
+    colnames(sim_df[, 1:10]) = paste("exposure_", 1:10, sep = "") 
+    colnames(sim_df[, 11:15]) = paste("confounder_", 1:5, sep = "")
+    
+    # Simulate nonlinear and interactive effect from two exposures (M1, M5) and linear effect from five confounders (C1, C2, C3, C4, C5)
+    hfunY = function(z) h_fun_Y(z, ind1 = 1, ind2 = 5, ind3 = 11, ind4 = 12, ind5 = 13, ind6 = 14, ind7 = 15) 
+    h_fun_Y = function(z, ind1, ind2, ind3, ind4, ind5, ind6, ind7) {
+      
+        0.2*(z[ind1])^2 + 0.2*(z[ind2])^2 + 0.1*(z[ind1])*(z[ind2]) + # Complex exposure effect
+        0.1*z[ind3] + 0.1*z[ind4] + 0.1*z[ind5] + 0.1*z[ind6] + 0.1*z[ind7] # Simple confounding effect
+      
+    }
+    
+    sim_df$hY = apply(sim_df, 1, hfunY) 
+    
+    # Add noise
+    epsY = rnorm(N, mean = 1, sd = 0.2)
+    sim_df$Y = with(sim_df, hY + epsY)
+    
+    # Remove unused columns
+    sim_df = sim_df %>% 
+      dplyr::select(-hY)
+    
+    # Return simulated data
+    return(sim_df)
+    
+  }
+  
+  # Scenario 3: complex exposures (nonlinear / interactions) + multicollinearity, simple confounding
+  if (scenario == 3){
+    
+    # Simulate 15 normally distributed variables: 10 exposures and 5 confounders
+    # Exposures have higher correlation to each other
+    correlated_vars = rnorm_multi(
+      n = N,
+      mu = rep(x = 1, 15),
+      sd = rep(x = 0.2, 15),
+      r = c(1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1),
+      varnames = c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "C1", "C2", "C3", "C4", "C5"),
+      empirical = FALSE
+    )
+    
+    sim_df = data.frame(correlated_vars)
+    colnames(sim_df[, 1:10]) = paste("exposure_", 1:10, sep = "") 
+    colnames(sim_df[, 11:15]) = paste("confounder_", 1:5, sep = "")
+    
+    # Simulate nonlinear and interactive effect from two exposures (M1, M5) and linear effect from five confounders (C1, C2, C3, C4, C5)
+    hfunY = function(z) h_fun_Y(z, ind1 = 1, ind2 = 5, ind3 = 11, ind4 = 12, ind5 = 13, ind6 = 14, ind7 = 15) 
+    h_fun_Y = function(z, ind1, ind2, ind3, ind4, ind5, ind6, ind7) {
+      
+        0.2*(z[ind1])^2 + 0.2*(z[ind2])^2 + 0.1*(z[ind1])*(z[ind2]) + # Complex exposure effect
+        0.1*z[ind3] + 0.1*z[ind4] + 0.1*z[ind5] + 0.1*z[ind6] + 0.1*z[ind7] # Simple confounding effect
+      
+    }
+    
+    sim_df$hY = apply(sim_df, 1, hfunY) 
+    
+    # Add noise
+    epsY = rnorm(N, mean = 1, sd = 0.2)
+    sim_df$Y = with(sim_df, hY + epsY)
+    
+    # Remove unused columns
+    sim_df = sim_df %>% 
+      dplyr::select(-hY)
+    
+    # Return simulated data
+    return(sim_df)
+    
+  }
+  
+  # Scenario 4: complex exposures (trigonometric), simple confounding
+  if (scenario == 4){
+    
+    # Simulate 15 normally distributed variables: 10 exposures and 5 confounders
+    correlated_vars = rnorm_multi(
+      n = N,
+      mu = rep(x = 1, 15),
+      sd = rep(x = 0.2, 15),
+      r = 0.25,
+      varnames = c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "C1", "C2", "C3", "C4", "C5"),
+      empirical = FALSE
+    ) 
+    
+    sim_df = data.frame(correlated_vars)
+    colnames(sim_df[, 1:10]) = paste("exposure_", 1:10, sep = "") 
+    colnames(sim_df[, 11:15]) = paste("confounder_", 1:5, sep = "")
+    
+    # Simulate nonlinear and interactive effect from two exposures (M1, M5) and linear effect from five confounders (C1, C2, C3, C4, C5)
+    hfunY = function(z) h_fun_Y(z, ind1 = 1, ind2 = 5, ind3 = 11, ind4 = 12, ind5 = 13, ind6 = 14, ind7 = 15) 
+    h_fun_Y = function(z, ind1, ind2, ind3, ind4, ind5, ind6, ind7) {
+      
+        0.35*sin(z[ind1]) + 0.35*sin(z[ind2]) + 0.3*(z[ind1])*(z[ind2]) + # Complex exposure effect using sin
+        0.1*z[ind3] + 0.1*z[ind4] + 0.1*z[ind5] + 0.1*z[ind6] + 0.1*z[ind7] # Simple confounding effect
+      
+    }
+    
+    sim_df$hY = apply(sim_df, 1, hfunY) 
+    
+    # Add noise
+    epsY = rnorm(N, mean = 1, sd = 0.2)
+    sim_df$Y = with(sim_df, hY + epsY)
+    
+    # Remove unused columns
+    sim_df = sim_df %>% 
+      dplyr::select(-hY)
+    
+    # Return simulated data
+    return(sim_df)
+    
+  }
+  
+  # Scenario 5: complex exposures (trigonometric) + multicollinearity, simple confounding
+  if (scenario == 5){
+  
+    # Simulate 15 normally distributed variables: 10 exposures and 5 confounders
+    # Exposures have higher correlation to each other
+    correlated_vars = rnorm_multi(
+      n = N,
+      mu = rep(x = 1, 15),
+      sd = rep(x = 0.2, 15),
+      r = c(1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1),
+      varnames = c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "C1", "C2", "C3", "C4", "C5"),
+      empirical = FALSE
+    )
+    
+    sim_df = data.frame(correlated_vars)
+    colnames(sim_df[, 1:10]) = paste("exposure_", 1:10, sep = "") 
+    colnames(sim_df[, 11:15]) = paste("confounder_", 1:5, sep = "")
+    
+    # Simulate nonlinear and interactive effect from two exposures (M1, M5) and linear effect from five confounders (C1, C2, C3, C4, C5)
+    hfunY = function(z) h_fun_Y(z, ind1 = 1, ind2 = 5, ind3 = 11, ind4 = 12, ind5 = 13, ind6 = 14, ind7 = 15) 
+    h_fun_Y = function(z, ind1, ind2, ind3, ind4, ind5, ind6, ind7) {
+      
+      0.35*sin(z[ind1]) + 0.35*sin(z[ind2]) + 0.3*(z[ind1])*(z[ind2]) + # Complex exposure effect using sin
+      0.1*z[ind3] + 0.1*z[ind4] + 0.1*z[ind5] + 0.1*z[ind6] + 0.1*z[ind7] # Simple confounding effect
+      
+    }
+    
+    sim_df$hY = apply(sim_df, 1, hfunY) 
+    
+    # Add noise
+    epsY = rnorm(N, mean = 1, sd = 0.2)
+    sim_df$Y = with(sim_df, hY + epsY)
+    
+    # Remove unused columns
+    sim_df = sim_df %>% 
+      dplyr::select(-hY)
+    
+    # Return simulated data
+    return(sim_df)
+    
+  }
+  
+  # Scenario 6: simple exposures, complex confounding
+  if (scenario == 6){
+    
+    # Simulate 15 normally distributed variables: 10 exposures and 5 confounders
+    correlated_vars = rnorm_multi(
+      n = N,
+      mu = rep(x = 1, 15),
+      sd = rep(x = 0.2, 15),
+      r = 0.25,
+      varnames = c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "C1", "C2", "C3", "C4", "C5"),
+      empirical = FALSE
+    )
+    
+    # Confound M1 and M2 with more complexity than before
+    M1 = rnorm(
+          N, 
+          mean = sin(0.2*correlated_vars[, 11] + 0.2*correlated_vars[, 12] + 0.2*correlated_vars[, 13] +
+                    0.2*correlated_vars[, 14] + 0.2*correlated_vars[, 15]) + 0.8*correlated_vars[, 1],
+          sd = 0.2
+        )
+  
+    M2 = rnorm(
+          N, 
+          mean = sin(0.2*correlated_vars[, 11] + 0.2*correlated_vars[, 12] + 0.2*correlated_vars[, 13] +
+                    0.2*correlated_vars[, 14] + 0.2*correlated_vars[, 15]) + 0.8*correlated_vars[, 2],
+          sd = 0.2
+        )  
+    
+    sim_df = data.frame(M1, M2, correlated_vars[, 3:15])
+    colnames(sim_df[, 1:10]) = paste("exposure_", 1:10, sep = "") 
+    colnames(sim_df[, 11:15]) = paste("confounder_", 1:5, sep = "")
+    
+    # Simulate linear effect from two exposures (M1, M5) and nonlinear effect with interactions from five confounders (C1-5)
+    # M1 is confounded with C1-5, M5 is not
+    # M2 is correlated with C1-5, but has no direct effect on outcome (spurious association)
+    hfunY = function(z) h_fun_Y(z, ind1 = 1, ind2 = 5, ind3 = 11, ind4 = 12, ind5 = 13, ind6 = 14, ind7 = 15) 
+    h_fun_Y = function(z, ind1, ind2, ind3, ind4, ind5, ind6, ind7) {
+  
+      0.5*z[ind1] + 0.5*z[ind2] + # Simple exposure effect, omitting C2
+      0.2*(z[ind3])^2 + 0.2*(z[ind4])^2 + 0.2*(z[ind5])^2 + 0.1*z[ind6] + 0.1*z[ind7] + # Quadratic confounding effect from C1-3
+      0.1*(z[ind6])*(z[ind7]) # Interactive confounding effect from C4, C5
+}
+    
+    sim_df$hY = apply(sim_df, 1, hfunY) 
+    
+    # Add noise
+    epsY = rnorm(N, mean = 1, sd = 0.2)
+    sim_df$Y = with(sim_df, hY + epsY)
+    
+    # Remove unused columns
+    sim_df = sim_df %>% 
+      dplyr::select(-hY)
+    
+    # Return simulated data
+    return(sim_df)
+    
+  }
+  
+  # Scenarion 7: complex exposures (nonlinear / interactions), complex confounding
+  if (scenario == 7){
+    
+    # Simulate 15 normally distributed variables: 10 exposures and 5 confounders
+    correlated_vars = rnorm_multi(
+      n = N,
+      mu = rep(x = 1, 15),
+      sd = rep(x = 0.2, 15),
+      r = 0.25,
+      varnames = c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "C1", "C2", "C3", "C4", "C5"),
+      empirical = FALSE
+    )
+    
+    # Confound M1 and M2 with more complexity than before
+    M1 = rnorm(
+          N, 
+          mean = sin(0.2*correlated_vars[, 11] + 0.2*correlated_vars[, 12] + 0.2*correlated_vars[, 13] +
+                    0.2*correlated_vars[, 14] + 0.2*correlated_vars[, 15]) + 0.8*correlated_vars[, 1],
+          sd = 0.2
+        )
+  
+    M2 = rnorm(
+          N, 
+          mean = sin(0.2*correlated_vars[, 11] + 0.2*correlated_vars[, 12] + 0.2*correlated_vars[, 13] +
+                    0.2*correlated_vars[, 14] + 0.2*correlated_vars[, 15]) + 0.8*correlated_vars[, 2],
+          sd = 0.2
+        )  
+    
+    sim_df = data.frame(M1, M2, correlated_vars[, 3:15])
+    colnames(sim_df[, 1:10]) = paste("exposure_", 1:10, sep = "") 
+    colnames(sim_df[, 11:15]) = paste("confounder_", 1:5, sep = "")
+    
+    # Simulate nonlinear effect with interactions from two exposures (M1, M5) and nonlinear effect with interactions from five confounders (C1, C2, C3, C4, C5)
+    # M1 is confounded with C1-5, M5 is not
+    # M2 is correlated with C1-5, but has no direct effect on outcome (spurious association)
+    hfunY = function(z) h_fun_Y(z, ind1 = 1, ind2 = 5, ind3 = 11, ind4 = 12, ind5 = 13, ind6 = 14, ind7 = 15) 
+    h_fun_Y = function(z, ind1, ind2, ind3, ind4, ind5, ind6, ind7) {
+      
+        0.2*(z[ind1])^2 + 0.2*(z[ind2])^2 + 0.1*(z[ind1])*(z[ind2]) + # Complex exposure effect (nonlinear/interaction)
+        0.2*(z[ind3])^2 + 0.2*(z[ind4])^2 + 0.2*(z[ind5])^2 + 0.1*z[ind6] + 0.1*z[ind7] + # Quadratic confounding effect from C1-3
+        0.1*(z[ind6])*(z[ind7]) # Interactive confounding effect from C4, C5
+    }
+    
+    sim_df$hY = apply(sim_df, 1, hfunY) 
+    
+    # Add noise
+    epsY = rnorm(N, mean = 1, sd = 0.2)
+    sim_df$Y = with(sim_df, hY + epsY)
+    
+    # Remove unused columns
+    sim_df = sim_df %>% 
+      dplyr::select(-hY)
+    
+    # Return simulated data
+    return(sim_df)
+    
+  }
+  
+  # Scenario 8: complex exposures (trigonometric), complex confounding
+  if (scenario == 8){
+  
+    # Simulate 15 normally distributed variables: 10 exposures and 5 confounders
+    correlated_vars = rnorm_multi(
+      n = N,
+      mu = rep(x = 1, 15),
+      sd = rep(x = 0.2, 15),
+      r = 0.25,
+      varnames = c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "C1", "C2", "C3", "C4", "C5"),
+      empirical = FALSE
+    )
+    
+    # Confound M1 and M2 with more complexity than before
+    M1 = rnorm(
+          N, 
+          mean = sin(0.2*correlated_vars[, 11] + 0.2*correlated_vars[, 12] + 0.2*correlated_vars[, 13] +
+                    0.2*correlated_vars[, 14] + 0.2*correlated_vars[, 15]) + 0.8*correlated_vars[, 1],
+          sd = 0.2
+        )
+  
+    M2 = rnorm(
+          N, 
+          mean = sin(0.2*correlated_vars[, 11] + 0.2*correlated_vars[, 12] + 0.2*correlated_vars[, 13] +
+                    0.2*correlated_vars[, 14] + 0.2*correlated_vars[, 15]) + 0.8*correlated_vars[, 2],
+          sd = 0.2
+        )  
+    
+    sim_df = data.frame(M1, M2, correlated_vars[, 3:15])
+    colnames(sim_df[, 1:10]) = paste("exposure_", 1:10, sep = "") 
+    colnames(sim_df[, 11:15]) = paste("confounder_", 1:5, sep = "")
+    
+    # Simulate nonlinear effect with interactions from two exposures (M1, M5) and nonlinear effect with interactions from five confounders (C1, C2, C3, C4, C5)
+    # M1 is confounded with C1-5, M5 is not
+    # M2 is correlated with C1-5, but has no direct effect on outcome (spurious association)
+    hfunY = function(z) h_fun_Y(z, ind1 = 1, ind2 = 5, ind3 = 11, ind4 = 12, ind5 = 13, ind6 = 14, ind7 = 15) 
+    h_fun_Y = function(z, ind1, ind2, ind3, ind4, ind5, ind6, ind7) {
+      
+        0.35*sin(z[ind1]) + 0.35*sin(z[ind2]) + 0.3*(z[ind1])*(z[ind2]) + # Complex exposure effect using sin
+        0.2*(z[ind3])^2 + 0.2*(z[ind4])^2 + 0.2*(z[ind5])^2 + 0.1*z[ind6] + 0.1*z[ind7] + # Quadratic confounding effect from C1-3
+        0.1*(z[ind6])*(z[ind7]) # Interactive confounding effect from C4, C5
+    }
+    
+    sim_df$hY = apply(sim_df, 1, hfunY) 
+    
+    # Add noise
+    epsY = rnorm(N, mean = 1, sd = 0.2)
+    sim_df$Y = with(sim_df, hY + epsY)
+    
+    # Remove unused columns
+    sim_df = sim_df %>% 
+      dplyr::select(-hY)
+    
+    # Return simulated data
+    return(sim_df)
+    
+  }
+  
+  # Scenario 9: complex exposures (nonlinear / interactions) + multicollinearity, complex confounding
+  if (scenario == 9){
+    
+    # Simulate 15 normally distributed variables: 10 exposures and 5 confounders
+    # High collinearity among the exposures
+    correlated_vars = rnorm_multi(
+      n = N,
+      mu = rep(x = 1, 15),
+      sd = rep(x = 0.2, 15),
+      r = c(1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1),
+      varnames = c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "C1", "C2", "C3", "C4", "C5"),
+      empirical = FALSE
+    )
+    
+    # Confound M1 and M2 with more complexity than before
+    M1 = rnorm(
+          N, 
+          mean = sin(0.2*correlated_vars[, 11] + 0.2*correlated_vars[, 12] + 0.2*correlated_vars[, 13] +
+                    0.2*correlated_vars[, 14] + 0.2*correlated_vars[, 15]) + 0.8*correlated_vars[, 1],
+          sd = 0.2
+        )
+  
+    M2 = rnorm(
+          N, 
+          mean = sin(0.2*correlated_vars[, 11] + 0.2*correlated_vars[, 12] + 0.2*correlated_vars[, 13] +
+                    0.2*correlated_vars[, 14] + 0.2*correlated_vars[, 15]) + 0.8*correlated_vars[, 2],
+          sd = 0.2
+        )  
+    
+    sim_df = data.frame(M1, M2, correlated_vars[, 3:15])
+    colnames(sim_df[, 1:10]) = paste("exposure_", 1:10, sep = "") 
+    colnames(sim_df[, 11:15]) = paste("confounder_", 1:5, sep = "")
+    
+    # Simulate nonlinear effect with interactions from two exposures (M1, M5) and nonlinear effect with interactions from five confounders (C1, C2, C3, C4, C5)
+    # M1 is confounded with C1-5, M5 is not
+    # M2 is correlated with C1-5, but has no direct effect on outcome (spurious association)
+    hfunY = function(z) h_fun_Y(z, ind1 = 1, ind2 = 5, ind3 = 11, ind4 = 12, ind5 = 13, ind6 = 14, ind7 = 15) 
+    h_fun_Y = function(z, ind1, ind2, ind3, ind4, ind5, ind6, ind7) {
+      
+        0.2*(z[ind1])^2 + 0.2*(z[ind2])^2 + 0.1*(z[ind1])*(z[ind2]) + # Complex exposure effect (nonlinear/interaction)
+        0.2*(z[ind3])^2 + 0.2*(z[ind4])^2 + 0.2*(z[ind5])^2 + 0.1*z[ind6] + 0.1*z[ind7] + # Quadratic confounding effect from C1-3
+        0.1*(z[ind6])*(z[ind7]) # Interactive confounding effect from C4, C5
+    }
+    
+    sim_df$hY = apply(sim_df, 1, hfunY) 
+    
+    # Add noise
+    epsY = rnorm(N, mean = 1, sd = 0.2)
+    sim_df$Y = with(sim_df, hY + epsY)
+    
+    # Remove unused columns
+    sim_df = sim_df %>% 
+      dplyr::select(-hY)
+    
+    # Return simulated data
+    return(sim_df)
+    
+  }
+  
+  # 10 = complex exposures (trigonometric) + multicollinearity, complex confounding
+  if (scenario == 10){
+    
+    # Simulate 15 normally distributed variables: 10 exposures and 5 confounders
+    # High collinearity among the exposures
+    correlated_vars = rnorm_multi(
+      n = N,
+      mu = rep(x = 1, 15),
+      sd = rep(x = 0.2, 15),
+      r = c(1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.7, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 1, 0.25, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1, 0.25,
+            0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 1),
+      varnames = c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "C1", "C2", "C3", "C4", "C5"),
+      empirical = FALSE
+    )
+    
+    # Confound M1 and M2 with more complexity than before
+    M1 = rnorm(
+          N, 
+          mean = sin(0.2*correlated_vars[, 11] + 0.2*correlated_vars[, 12] + 0.2*correlated_vars[, 13] +
+                    0.2*correlated_vars[, 14] + 0.2*correlated_vars[, 15]) + 0.8*correlated_vars[, 1],
+          sd = 0.2
+        )
+  
+    M2 = rnorm(
+          N, 
+          mean = sin(0.2*correlated_vars[, 11] + 0.2*correlated_vars[, 12] + 0.2*correlated_vars[, 13] +
+                    0.2*correlated_vars[, 14] + 0.2*correlated_vars[, 15]) + 0.8*correlated_vars[, 2],
+          sd = 0.2
+        )  
+    
+    sim_df = data.frame(M1, M2, correlated_vars[, 3:15])
+    colnames(sim_df[, 1:10]) = paste("exposure_", 1:10, sep = "") 
+    colnames(sim_df[, 11:15]) = paste("confounder_", 1:5, sep = "")
+    
+    # Simulate nonlinear effect with interactions from two exposures (M1, M5) and nonlinear effect with interactions from five confounders (C1, C2, C3, C4, C5)
+    # M1 is confounded with C1-5, M5 is not
+    # M2 is correlated with C1-5, but has no direct effect on outcome (spurious association)
+    hfunY = function(z) h_fun_Y(z, ind1 = 1, ind2 = 5, ind3 = 11, ind4 = 12, ind5 = 13, ind6 = 14, ind7 = 15) 
+    h_fun_Y = function(z, ind1, ind2, ind3, ind4, ind5, ind6, ind7) {
+      
+        0.35*sin(z[ind1]) + 0.35*sin(z[ind2]) + 0.3*(z[ind1])*(z[ind2]) + # Complex exposure effect using sin
+        0.2*(z[ind3])^2 + 0.2*(z[ind4])^2 + 0.2*(z[ind5])^2 + 0.1*z[ind6] + 0.1*z[ind7] + # Quadratic confounding effect from C1-3
+        0.1*(z[ind6])*(z[ind7]) # Interactive confounding effect from C4, C5
+    }
+    
+    sim_df$hY = apply(sim_df, 1, hfunY) 
+    
+    # Add noise
+    epsY = rnorm(N, mean = 1, sd = 0.2)
+    sim_df$Y = with(sim_df, hY + epsY)
+    
+    # Remove unused columns
+    sim_df = sim_df %>% 
+      dplyr::select(-hY)
+    
+    # Return simulated data
+    return(sim_df)
+    
+  }
+
+}
+
+# Check correlations
+# data = data_simulation(scenario = 10, N = 1000)
+# corr = cor(data)
+# corrplot(corr, type = "upper")
+```
+
+```{r}
+# Function for functional forms
+
+functional_forms = function(scenario, covars){
+  
+  if(scenario == 1){
+    
+    a = 0.25*covars[1] + 0.25*covars[5] + 0.1*covars[11] + 0.1*covars[12] + 0.1*covars[13] + 0.1*covars[14] + 0.1*covars[15]
+    
+  }
+  
+  if(scenario %in% c(2, 3)){
+    
+    a = 0.2*(covars[1])^2 + 0.2*(covars[5])^2 + 0.1*(covars[1]*covars[5]) + 0.1*covars[11] + 0.1*covars[12] + 0.1*covars[13] + 0.1*covars[14] + 0.1*covars[15]
+    
+  }
+  
+  if(scenario %in% c(4, 5)){
+    
+    a = 0.35*sin(covars[1]) + 0.35*sin(covars[5]) + 0.3*(covars[1])*(covars[5]) + 0.1*covars[11] + 0.1*covars[12] + 0.1*covars[13] + 0.1*covars[14] + 0.1*covars[15]
+    
+      
+  }
+  
+  if (scenario == 6){
+    
+    a = 0.5*covars[1] + 0.5*covars[5] + 0.2*(covars[11])^2 + 0.2*(covars[12])^2 + 0.2*(covars[13])^2 + 0.1*covars[14] + 0.1*covars[14] + 0.1*(covars[14])*(covars[15])
+    
+    }
+    
+  if (scenario %in% c(7, 9)){
+    
+    a = 0.2*(covars[1])^2 + 0.2*(covars[5])^2 + 0.1*(covars[1]*covars[5]) + 0.2*(covars[11])^2 + 0.2*(covars[12])^2 + 0.2*(covars[13])^2 + 0.1*covars[14] + 0.1*covars[14] + 0.1*(covars[14])*(covars[15])
+      
+    }
+    
+  if (scenario %in% c(8, 10)){
+    
+    a = 0.35*sin(covars[1]) + 0.35*sin(covars[5]) + 0.3*(covars[1])*(covars[5]) + 0.2*(covars[11])^2 + 0.2*(covars[12])^2 + 0.2*(covars[13])^2 + 0.1*covars[14] + 0.1*covars[14] + 0.1*(covars[14])*(covars[15])
+
+    }
+ 
+  return(a)   
+}
+```
+
+```{r}
+# Simulate M data sets of N observations for each scenario
+set.seed(2132)
+M = 400 # number of data sets per scenario
+N = 1000 # number of observations per data set
+
+simulated_data = list()
+
+for (scenario in 1:10){
+  
+  simulated_data_loop = lapply(1:M, function(i) data_simulation(scenario = scenario, N = N))
+  
+  for (data_frame in 1:M){
+    
+    simulated_data_loop[[data_frame]]$scenario = scenario
+    
+  }
+  
+  simulated_data = append(simulated_data, simulated_data_loop)
+  
+}
+
+simulated_data = saveRDS(simulated_data, file = "simulated_data.RDS")
+```
+
+# Estimands and true effects
+
+```{r}
+# First estimand of interest: effect of interquartile range change in exposure levels
+
+quantiles = data.frame()
+
+# For each scenario, simulate 1000 datasets with 1000 observations
+
+set.seed(2132)
+
+for (i in 1:10){
+  
+  for (j in 1:1000){
+    
+    sim_data = data_simulation(scenario = i, N = 1000)
+    q1 = apply(sim_data, 2, function(x) quantile(x, 0.25))
+    med = apply(sim_data, 2, median)
+    q2 = apply(sim_data, 2, function(x) quantile(x, 0.75))
+    quantiles = bind_rows(
+      quantiles,
+      bind_cols(scenario = i, quantile = c(0.25, 0.50, 0.75),
+      bind_rows(q1, med, q2)
+      )
+    )
+    
+  }
+  
+}
+
+# For each scenario, average across datasets for each quantile of a given metal
+
+# Function for table
+metal_IQR_table = function(scenario, metal){
+  
+  # Average across datasets of each quantile for given metal in given scenario
+  m.25 = quantiles %>% 
+          filter(quantile == 0.25 & scenario == {{scenario}}) %>% 
+          dplyr::select(c(metal + 2)) %>% 
+          t() %>% 
+          mean()
+    
+  m.75 = quantiles %>% 
+          filter(quantile == 0.75 & scenario == {{scenario}}) %>% 
+          dplyr::select(c(metal + 2)) %>% 
+          t() %>% 
+          mean()
+  
+  # For interquartile range change
+  # Create tables with all vars at median except for given exposure to obtain potential outcomes (counterfactuals)
+  q1.m = apply(filter(quantiles, quantile == 0.5 & scenario == {{scenario}}), 2, mean)
+  q1.m[[c(metal + 2)]] = m.25
+  q2.m = q1.m
+  q2.m[[c(metal + 2)]] = m.75
+  
+  table = rbind(q1.m, q2.m) %>% as.data.frame() %>% dplyr::select(-scenario, -quantile)
+  
+  return(table)
+  
+}
+
+# Function for causal effect (difference in potential outcomes)
+metal_IQR_effect = function(scenario, metal){
+  
+  # Obtain metal IQR table
+  table = metal_IQR_table(scenario, metal)
+  
+  # Calculate true effect
+  true_effect = functional_forms(scenario, table[2, ]) - functional_forms(scenario, table[1, ])
+  
+  return(true_effect[[1]])
+  
+}
+```
+
+```{r}
+# Calculate true effects
+true_effects = data.frame()
+
+for (scenario_i in 1:10){
+  
+  for (metal_j in 1:10){
+    
+    effect = metal_IQR_effect(scenario_i, metal_j)
+    true_effects = bind_rows(
+      true_effects,
+      bind_cols(scenario = scenario_i,
+                metal = metal_j,
+                effect = effect)
+    )
+    
+  }
+  
+}
+
+true_effects = true_effects %>% 
+  pivot_wider(
+    names_from = metal,
+    values_from = effect
+  )
+
+true_effects = saveRDS(true_effects, file = "true_effects.RDS")
+```
+
+```{r}
+# Repeat but for aggregate mixture profiles
+
+# Function for table
+metal_IQR_mix_table = function(scenario){
+  
+  # Average across datasets of each quantile for given metal in given scenario
+  m.25 = quantiles %>% 
+    filter(quantile == 0.25 & scenario == {{scenario}}) %>% 
+    dplyr::select(M1:Y)
+    
+  m.75 = quantiles %>% 
+    filter(quantile == 0.75 & scenario == {{scenario}}) %>% 
+    dplyr::select(M1:Y)
+  
+  q.1.means = apply(m.25, 2, mean)
+  q.2.means = apply(m.75, 2, mean)
+  
+  table = rbind(q.1.means, q.2.means) %>% as.data.frame()
+  
+  return(table)
+  
+}
+
+# Function for causal effect with aggregate mixture profile
+metal_IQR_mix_effect = function(scenario){
+  
+  # Obtain metal IQR table
+  table = metal_IQR_mix_table(scenario)
+  
+  # Calculate true effect
+  true_effect = functional_forms(scenario, table[2, ]) - functional_forms(scenario, table[1, ])
+  
+  return(true_effect[[1]])
+  
+}
+
+# Calculate true effects
+true_effects_mixture = data.frame()
+
+for (scenario in 1:10){
+    
+    effect = metal_IQR_mix_effect(scenario)
+    true_effects_mixture = bind_rows(
+      true_effects_mixture,
+      bind_cols(scenario = scenario,
+                effect = effect)
+    )
+  
+}
+
+true_effects_mixture = saveRDS(true_effects_mixture, file = "true_effects_mixture.RDS")
+```
