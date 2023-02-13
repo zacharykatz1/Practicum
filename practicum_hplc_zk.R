@@ -839,14 +839,12 @@ model_fnct = function(scenarios_count, metals_count, boot_count, model_type){
   
 }
 
-# Run model(s)
-t1 = Sys.time()
-
 # Test on linear model
 # Each core runs all 10 scenarios, but 40 datasets per scenario (x 10 cores = 400 total datasets)
+t1 = Sys.time()
 linear_df = model_fnct(scenarios_count = 10, metals_count = 10, boot_count = 100, model_type = "linear")
 saveRDS(linear_df, file = paste0("linear_estimates_", currind, ".Rds"))
+t2 = Sys.time()
 
 # Check time
-t2 = Sys.time()
 t2 - t1
