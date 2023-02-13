@@ -28,6 +28,7 @@ library(grf)
 simulated_data = readRDS("../data/simulated_data.RDS")
 true_effects = readRDS("../data/true_effects.RDS")
 true_effects_mixture = readRDS("../data/true_effects_mixture.RDS")
+quantiles = readRDS("../data/quantiles.RDS")
 
 # Parameters
 length = 40 # Number of datasets per currind (400/dim array job)
