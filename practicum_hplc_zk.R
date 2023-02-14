@@ -67,21 +67,28 @@ metal_IQR_table = function(scenario, metal){
 
 metal_IQR_mix_table = function(scenario){
   
-  # Average across datasets of each quantile for given metal in given scenario
-  m.25 = quantiles %>% 
-    filter(quantile == 0.25 & scenario == {{scenario}}) %>% 
-    dplyr::select(M1:Y)
-  
-  m.75 = quantiles %>% 
-    filter(quantile == 0.75 & scenario == {{scenario}}) %>% 
-    dplyr::select(M1:Y)
-  
-  q.1.means = apply(m.25, 2, mean)
-  q.2.means = apply(m.75, 2, mean)
-  
-  table = rbind(q.1.means, q.2.means) %>% as.data.frame()
-  
-  return(table)
+    # Average across datasets of each quantile for given metal in given scenario
+    m.25 = quantiles %>% 
+      filter(quantile == 0.25 & scenario == {{scenario}}) %>% 
+      dplyr::select(M1:M10)
+    
+    m.75 = quantiles %>% 
+      filter(quantile == 0.75 & scenario == {{scenario}}) %>% 
+      dplyr::select(M1:M10)
+    
+    c.50 = quantiles %>% 
+      filter(quantile == 0.50 & scenario == {{scenario}}) %>% 
+      dplyr::select(C1:C5)
+    
+    q.1.means = apply(m.25, 2, mean)
+    q.2.means = apply(m.75, 2, mean)
+    c.means = apply(c.50, 2, mean)
+    
+    table = rbind(q.1.means, q.2.means) %>% as.data.frame()
+    confound = rbind(c.means, c.means)
+    table = cbind(table, confound)
+    
+    return(table)
   
 }
 
