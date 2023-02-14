@@ -1,8 +1,8 @@
 # Parallelized modeling using high performance cluster
 
 # To specify current index for dataset choice
-args = commandArgs(TRUE)
-currind = as.integer(args[1])
+args <- commandArgs(TRUE)
+currind <- as.integer(args[1])
 print(currind)
 
 # May not be necessary

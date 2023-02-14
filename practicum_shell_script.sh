@@ -1,7 +1,7 @@
 #!/bin/bash
 #$ -cwd -l mem=3g,time=01:00:00 -S /bin/bash -N JOBa1 -j y -t 1-10
 
-currind=$SGE_TASK_ID
+currind=SGE_TASK_ID
 module load R/4.2.2
 
 # R=/nfs/apps/R/4.2.2/bin/R
