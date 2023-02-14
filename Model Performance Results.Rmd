@@ -1,0 +1,37 @@
+---
+title: "Model Performance Results"
+author: 'Zachary Katz (UNI: zak2132)'
+date: "2023-02-14"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+opts_knit$set(root.dir = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/Linear/")
+
+library(tidyverse)
+require("knitr")
+```
+
+```{r}
+linear_df_results <-
+  list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/Linear/", pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  )
+```
+
+```{r}
+linear_df_summary = linear_df_results %>% 
+  group_by(scenario, metal) %>% 
+  summarize_all(
+    mean
+  )
+
+linear_df_summary %>% 
+  ggplot(aes(x = metal, y = RMSE, color = scenario)) + 
+  geom_point()
+```
+

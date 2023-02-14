@@ -31,7 +31,7 @@ true_effects_mixture <- readRDS('/ifs/scratch/msph/biostat/zak2132/data/true_eff
 quantiles <- readRDS('/ifs/scratch/msph/biostat/zak2132/data/quantiles.RDS')
 
 # Parameters
-length = 40 # Number of datasets per currind (400/dim array job)
+length = 20 # Number of datasets per core (400/dim array job)
 M = 400 # Number of datasets per scenario
 N = 1000 # Number of observations per dataset
 
