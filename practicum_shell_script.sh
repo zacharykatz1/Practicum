@@ -8,5 +8,5 @@ export R_LIBS_USER=/ifs/scratch/msph/software/R/library422:/ifs/home/msph/biosta
 
 currind=$SGE_TASK_ID
 
-Rscript practicum_hplc_zk.R $currind
+Rscript linear_models.R $currind
 ~

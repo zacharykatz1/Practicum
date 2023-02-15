@@ -764,21 +764,12 @@ model_fnct = function(scenarios_count, metals_count, boot_count, model_type){
   
 }
 
-# Test on linear model
+# Test on elastic net model
 # Each core runs all 10 scenarios, but 20 datasets per scenario (x 10 cores = 400 total datasets)
 t1 = Sys.time()
-linear_df = model_fnct(scenarios_count = 10, metals_count = 10, boot_count = 100, model_type = "linear")
-write.csv(linear_df, file = paste0("linear_estimates_", currind, ".csv"))
-t2 = Sys.time()
-
-# Check time for linear model
-t2 - t1
-
-# Test on elastic net model
-t3 = Sys.time()
 elastic_net_df = model_fnct(scenarios_count = 10, metals_count = 10, boot_count = 100, model_type = "elastic net")
 write.csv(elastic_net_df, file = paste0("elastic_net_estimates_", currind, ".csv"))
-t4 = Sys.time()
+t2 = Sys.time()
 
-# Check time for elastic net model
-t4 - t3
+# Check time for model
+t2 - t1
