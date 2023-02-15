@@ -7,31 +7,45 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-opts_knit$set(root.dir = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/Linear/")
-
 library(tidyverse)
-require("knitr")
 ```
 
 ```{r}
-linear_df_results <-
-  list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/Linear/", pattern = "*.csv") %>% 
+linear_df_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/Linear/", pattern = "*.csv") %>% 
   map_df(~read_csv(.)) %>% 
   mutate(
     scenario = as.factor(scenario),
     metal = as.factor(metal)
+  ) %>% 
+  select(-dataset)
+
+linear_df_summary = linear_df_results %>% 
+  group_by(scenario, metal) %>% 
+  summarize_at(
+    c("point_estimate", "variance", "CI_lower", "CI_upper"), 
+    mean
   )
 ```
 
 ```{r}
-linear_df_summary = linear_df_results %>% 
+elastic_net_df_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/Elastic Net/", pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% 
+  select(-dataset)
+
+elastic_net_df_summary = elastic_net_df_results %>% 
   group_by(scenario, metal) %>% 
-  summarize_all(
+  summarize_at(
+    c("point_estimate", "variance", "CI_lower", "CI_upper"), 
     mean
   )
+```
 
-linear_df_summary %>% 
-  ggplot(aes(x = metal, y = RMSE, color = scenario)) + 
-  geom_point()
+```{r}
+# Calculate performance measures
+# TO DO
 ```
 
