@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -cwd -l mem=4g,time=02:00:00 -S /bin/bash -N JOBa1 -j y -t 1-20
+#$ -cwd -l mem=5g,time=02:00:00 -S /bin/bash -N JOBa1 -j y -t 1-20 -M zacharykatz1@gmail.com -m aes
 
 module load R/4.2.2
 
