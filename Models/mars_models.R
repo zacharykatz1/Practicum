@@ -13,9 +13,9 @@ print(currind)
 
 # Load relevant libraries
 library(tidyverse)
-library(glmnet)
 library(rsample)
-# library(caret)
+# library(glmnet)
+library(caret)
 # library(earth)
 # library(BART)
 # library(ranger)
@@ -765,12 +765,13 @@ model_fnct = function(scenarios_count, metals_count, boot_count, model_type){
   
 }
 
-# Test on elastic net model
+# Test on linear model
 # Each core runs all 10 scenarios, but 20 datasets per scenario (x 10 cores = 400 total datasets)
 t1 = Sys.time()
-elastic_net_df = model_fnct(scenarios_count = 10, metals_count = 10, boot_count = 100, model_type = "elastic net")
-write.csv(elastic_net_df, file = paste0("elastic_net_estimates_", currind, ".csv"))
+set.seed(2132)
+mars_df = model_fnct(scenarios_count = 1, metals_count = 10, boot_count = 1, model_type = "MARS")
+# write.csv(mars_df, file = paste0("MARS_estimates_", currind, ".csv"))
 t2 = Sys.time()
 
-# Check time for model
+# Check time for linear model
 t2 - t1

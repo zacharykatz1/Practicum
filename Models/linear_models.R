@@ -29,8 +29,9 @@ simulated_data <- readRDS('/ifs/scratch/msph/biostat/zak2132/data/simulated_data
 quantiles <- readRDS('/ifs/scratch/msph/biostat/zak2132/data/quantiles.RDS')
 
 # Parameters
-length = 20 # Number of datasets per core (400/dim array job)
+cores = 80
 M = 400 # Number of datasets per scenario
+length = M / cores # Number of datasets per core (400/dim array job)
 N = 1000 # Number of observations per dataset
 
 # Relevant functions
