@@ -1,4 +1,4 @@
-## LINEAR MODEL AND ELASTIC NET MODEL
+## GAM(1) MODEL
 
 # To specify current index for dataset choice
 args <- commandArgs(TRUE)
@@ -13,13 +13,13 @@ print(currind)
 
 # Load relevant libraries
 library(tidyverse)
-library(glmnet)
 library(rsample)
-# library(caret)
-# library(earth)
+library(glmnet)
+library(caret)
+library(earth)
+library(mgcv)
 # library(BART)
 # library(ranger)
-# library(mgcv)
 # library(SuperLearner)
 # library(qgcomp)
 # library(grf)
@@ -29,9 +29,9 @@ simulated_data <- readRDS('/ifs/scratch/msph/biostat/zak2132/data/simulated_data
 quantiles <- readRDS('/ifs/scratch/msph/biostat/zak2132/data/quantiles.RDS')
 
 # Parameters
-cores = 80
+cores = 400
 M = 400 # Number of datasets per scenario
-length = M / cores # Number of datasets per core (400/dim array job)
+length = M / cores # Number of datasets per core
 N = 1000 # Number of observations per dataset
 
 # Relevant functions
@@ -612,17 +612,19 @@ model_fit_fnct = function(model_type, data){
   
 }
 
-model_fnct = function(scenarios_count, metals_count, boot_count, model_type){
+model_fnct = function(scenarios_start, scenarios_end, metals_count, boot_count, model_type){
   
   estimates = data.frame()
   
-  for (i in 1:scenarios_count){
+  for (i in scenarios_start:scenarios_end){
     
     datasets = data.frame()
     
     filtered_datasets = dataset_filter(i)
     
     for (j in c(1:length) + ((currind - 1) * length)){
+
+      t1_indiv = Sys.time()
       
       data = filtered_datasets[[j]] %>% as.data.frame() %>% dplyr::select(M1:Y)
       
@@ -726,6 +728,9 @@ model_fnct = function(scenarios_count, metals_count, boot_count, model_type){
         # Find variance
         variance_indiv = var(boot_estimated_diffs)
         variance_mix = var(boot_estimated_diffs_mix)
+
+      	# Calculate time difference
+      	t2_indiv = Sys.time()
         
         row = bind_cols(
           scenario = i,
@@ -751,11 +756,14 @@ model_fnct = function(scenarios_count, metals_count, boot_count, model_type){
         CI_upper = ci_ul_mix
       )
       
-      metals = bind_rows(metals, row_mix)  
+      metals = bind_rows(metals, row_mix)
+  
       datasets = bind_rows(datasets, metals)
       
+      datasets$time = (t2_indiv - t1_indiv)[1]
+      
     }
-    
+
     estimates = bind_rows(estimates, datasets)
     
   }
@@ -765,12 +773,13 @@ model_fnct = function(scenarios_count, metals_count, boot_count, model_type){
   
 }
 
-# Test on elastic net model
-# Each core runs all 10 scenarios, but 20 datasets per scenario (x 10 cores = 400 total datasets)
+# Run model on 5 scenarios with 100 bootstraps
 t1 = Sys.time()
-elastic_net_df = model_fnct(scenarios_count = 10, metals_count = 10, boot_count = 100, model_type = "elastic net")
-write.csv(elastic_net_df, file = paste0("elastic_net_estimates_", currind, ".csv"))
+gam1_df = model_fnct(scenarios_start = 6, scenarios_end = 10, metals_count = 10, boot_count = 100, model_type = "GAM")
 t2 = Sys.time()
 
-# Check time for model
-t2 - t1
+# Output file
+write.csv(gam1_df, file = paste0("gam1_estimates_scens6to10_", currind, ".csv"))
+
+# Check time to run script
+time_mins = t2 - t1

@@ -31,50 +31,19 @@ elastic_net_df_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/
 ```
 
 ```{r}
-# Why not all results? Only 41,790
-# Failure to converge?
-mars_df_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/MARS/", pattern = "*.csv") %>% 
-  map_df(~read_csv(.)) %>% 
+mars_df_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/MARS/", pattern = "*.csv") %>%
+  map_df(~read_csv(.)) %>%
   mutate(
     scenario = as.factor(scenario),
     metal = as.factor(metal)
-  ) %>% 
+  ) %>%
   select(-dataset)
-```
-
-```{r}
-# Combine model performance dataframes
-all_results = rbind(linear_df_summary, elastic_net_df_summary, mars_df_summary)
 ```
 
 ```{r}
 # Load in true effects
 true_effects = readRDS("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/true_effects.RDS")
 true_effects_mixture = readRDS("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/true_effects_mixture.RDS")
-```
-
-```{r}
-
-  estimates_grouped = estimates %>%
-    group_by(scenario, metal) %>%
-    summarize(
-      mean_point_estimate = mean(point_estimate),
-      true_effect = mean(true_effect),
-      bias = mean(abs(point_bias)),
-      relative_bias = bias / true_effect,
-      variance_point_estimate = var(point_estimate),
-      RMSE = sqrt(mean(standard_error)),
-      coverage = mean(includes),
-      mean_sig_effect = mean(sig_effect)
-      )
-  
-  row = estimates_grouped %>%
-    dplyr::select(scenario, metal, mean_point_estimate, variance_point_estimate, bias, relative_bias, RMSE, coverage, TPR, FDR) %>%
-    head(1)
-
-  return(row)
-
-}
 ```
 
 ```{r}
@@ -135,14 +104,15 @@ model_performance = function(df){
         variance_point_estimate = var(point_estimate),
         RMSE = sqrt(mean(standard_error)),
         coverage = mean(includes),
-        mean_sig_effect = mean(sig_effect)
+        mean_sig_effect = mean(sig_effect),
+        avg_time = mean(time)
       ) %>%
     mutate(
       power = dplyr::case_when(
         metal %in% c(1, 5, 11) ~ mean_sig_effect,
         !(metal %in% c(1, 5, 11)) ~ 1 - mean_sig_effect)
     ) %>% 
-    select(scenario, metal, mean_point_estimate, bias, relative_bias, variance_point_estimate, RMSE, coverage, power)
+    select(scenario, metal, mean_point_estimate, bias, relative_bias, variance_point_estimate, RMSE, coverage, power, avg_time)
   
   performance_summary$model_type = model_type
   
@@ -152,15 +122,18 @@ model_performance = function(df){
 ```
 
 ```{r}
-# Check on linear model
+# Check performance
 linear_performance = model_performance(linear_df_results)
 elastic_net_performance = model_performance(elastic_net_df_results)
 mars_performance = model_performance(mars_df_results)
 
-linear_performance %>% 
+all_performance = rbind(linear_performance, elastic_net_performance, mars_performance)
+
+all_performance %>% 
   filter(metal %in% c(1, 5)) %>% 
-  ggplot(aes(x = metal, y = relative_bias, color = scenario)) + 
-  geom_point()
+  ggplot(aes(x = scenario, y = relative_bias, color = model_type)) + 
+  geom_point() + 
+  facet_grid(. ~ metal)
 ```
 
 
