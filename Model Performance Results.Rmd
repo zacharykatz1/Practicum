@@ -11,6 +11,7 @@ library(tidyverse)
 ```
 
 ```{r}
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/Linear")
 linear_df_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/Linear/", pattern = "*.csv") %>% 
   map_df(~read_csv(.)) %>% 
   mutate(
@@ -21,6 +22,7 @@ linear_df_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Resea
 ```
 
 ```{r}
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/Elastic Net")
 elastic_net_df_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/Elastic Net/", pattern = "*.csv") %>% 
   map_df(~read_csv(.)) %>% 
   mutate(
@@ -31,7 +33,41 @@ elastic_net_df_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/
 ```
 
 ```{r}
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/MARS")
 mars_df_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/MARS/", pattern = "*.csv") %>%
+  map_df(~read_csv(.)) %>%
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>%
+  select(-dataset)
+```
+
+```{r}
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/GAM1/")
+gam1_df_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/GAM1/", pattern = "*.csv") %>%
+  map_df(~read_csv(.)) %>%
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>%
+  select(-dataset)
+```
+
+```{r}
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/Quantile G-Computation/")
+qgcomp_df_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/Quantile G-Computation/", pattern = "*.csv") %>%
+  map_df(~read_csv(.)) %>%
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>%
+  select(-dataset)
+```
+
+```{r}
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/SuperLearner/")
+superlearner_df_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Model results/SuperLearner/", pattern = "*.csv") %>%
   map_df(~read_csv(.)) %>%
   mutate(
     scenario = as.factor(scenario),
@@ -101,6 +137,7 @@ model_performance = function(df){
         true_effect = mean(true_effect),
         bias = mean(abs(point_bias)),
         relative_bias = bias / true_effect,
+        relative_perc_diff = 2 * (bias - true_effect) / (abs(bias) + abs(true_effect)),
         variance_point_estimate = var(point_estimate),
         RMSE = sqrt(mean(standard_error)),
         coverage = mean(includes),
@@ -112,7 +149,7 @@ model_performance = function(df){
         metal %in% c(1, 5, 11) ~ mean_sig_effect,
         !(metal %in% c(1, 5, 11)) ~ 1 - mean_sig_effect)
     ) %>% 
-    select(scenario, metal, mean_point_estimate, bias, relative_bias, variance_point_estimate, RMSE, coverage, power, avg_time)
+    select(scenario, metal, mean_point_estimate, bias, relative_bias, relative_perc_diff, variance_point_estimate, RMSE, coverage, power, avg_time)
   
   performance_summary$model_type = model_type
   
@@ -126,11 +163,14 @@ model_performance = function(df){
 linear_performance = model_performance(linear_df_results)
 elastic_net_performance = model_performance(elastic_net_df_results)
 mars_performance = model_performance(mars_df_results)
+gam1_performance = model_performance(gam1_df_results)
+qgcomp_performance = model_performance(qgcomp_df_results)
+superlearner_performance = model_performance(superlearner_df_results)
 
-all_performance = rbind(linear_performance, elastic_net_performance, mars_performance)
+all_performance = rbind(linear_performance, elastic_net_performance, mars_performance, gam1_performance, qgcomp_performance, superlearner_performance)
 
 all_performance %>% 
-  filter(metal %in% c(1, 5)) %>% 
+  filter(metal %in% c(1,5)) %>% 
   ggplot(aes(x = scenario, y = relative_bias, color = model_type)) + 
   geom_point() + 
   facet_grid(. ~ metal)

@@ -1,4 +1,4 @@
-## GAM(1) MODEL
+## BART MODEL
 
 # To specify current index for dataset choice
 args <- commandArgs(TRUE)
@@ -17,9 +17,9 @@ library(rsample)
 library(glmnet)
 library(caret)
 library(earth)
-library(mgcv)
-# library(BART)
+library(BART)
 # library(ranger)
+# library(mgcv)
 # library(SuperLearner)
 # library(qgcomp)
 # library(grf)
@@ -773,13 +773,13 @@ model_fnct = function(scenarios_start, scenarios_end, metals_count, boot_count, 
   
 }
 
-# Run model on 5 scenarios with 100 bootstraps
+# Run model on a few scenarios with 100 bootstraps
 t1 = Sys.time()
-gam1_df = model_fnct(scenarios_start = 6, scenarios_end = 10, metals_count = 10, boot_count = 100, model_type = "GAM")
+bart_df = model_fnct(scenarios_start = 1, scenarios_end = 3, metals_count = 10, boot_count = 100, model_type = "BART")
 t2 = Sys.time()
 
 # Output file
-write.csv(gam1_df, file = paste0("gam1_estimates_scens6to10_", currind, ".csv"))
+write.csv(bart_df, file = paste0("bart_estimates_scens1to3_", currind, ".csv"))
 
 # Check time to run script
 time_mins = t2 - t1

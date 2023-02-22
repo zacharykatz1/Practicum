@@ -783,3 +783,4 @@ write.csv(gam1_df, file = paste0("gam1_estimates_scens1to5_", currind, ".csv"))
 
 # Check time to run script
 time_mins = t2 - t1
+time_mins
