@@ -332,7 +332,7 @@ data_simulation = function(scenario, N = 1000) {
     
   }
   
-  # Scenarion 7: complex exposures (nonlinear / interactions), complex confounding
+  # Scenario 7: complex exposures (nonlinear / interactions), complex confounding
   if (scenario == 7){
     
     # Simulate 15 normally distributed variables: 10 exposures and 5 confounders

@@ -1,0 +1,344 @@
+---
+title: "Model Performance Results"
+author: 'Zachary Katz (UNI: zak2132)'
+date: "2023-02-24"
+output: html_document
+---
+
+# Data Import & Wrangling
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+```{r, cache = TRUE, message = FALSE, warning = FALSE}
+# Import model results
+
+# Linear model
+setwd("~/Desktop/Linear/Results/")
+linear_results = list.files(path = "~/Desktop/Linear/Results/",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time / 60 # time in minutes
+  ) %>% 
+  distinct() %>% 
+  select(-dataset)
+
+# Elastic net model
+setwd("~/Desktop/Elastic Net/Results/")
+elastic_net_results = list.files(path = "~/Desktop/Elastic Net/Results/",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct() %>% 
+  select(-dataset)
+
+# MARS model
+setwd("~/Desktop/MARS/Results/")
+mars_results = list.files(path = "~/Desktop/MARS/Results/",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct() %>% 
+  select(-dataset)
+
+# GAM1 model
+setwd("~/Desktop/GAM1/Results/")
+gam1_results = list.files(path = "~/Desktop/GAM1/Results/",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time * 60 # convert to hours
+  ) %>% 
+  distinct() %>% 
+  select(-dataset)
+
+# Quantile G-Computation model
+setwd("~/Desktop/Quantile G-Computation/Results/")
+qgcomp_results = list.files(path = "~/Desktop/Quantile G-Computation/Results/",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct() %>% 
+  select(-dataset)
+
+# Causal Forest model
+setwd("~/Desktop/Causal Forest/Results/")
+causal_forest_results = list.files(path = "~/Desktop/Causal Forest/Results/",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct() %>% 
+  select(-dataset)
+```
+
+```{r}
+# Load in true effects
+true_effects = readRDS("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/true_effects.RDS")
+true_effects_mixture = readRDS("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/true_effects_mixture.RDS")
+```
+
+```{r, cache = TRUE}
+model_performance = function(df){
+  
+  rows = data.frame()
+  
+  df = df %>% 
+    select(scenario:model_type)
+  
+  model_type = df$model_type[1]
+  
+  for (row_num in 1:nrow(df)){
+    
+    row = df[row_num, ]
+    
+    if (as.numeric(row$metal) %in% c(1:10)){
+    
+      true_effect = true_effects[as.numeric(row$scenario), as.numeric(row$metal) + 1]
+    
+    }
+    
+    if (as.numeric(row$metal) %in% c(11)){
+    
+      true_effect = true_effects_mixture[as.numeric(row$scenario), ][, 2]
+    
+    }
+    
+    row_truth = row %>%
+      mutate(
+        true_effect = as.numeric(true_effect)
+      ) %>%
+      mutate(
+        point_bias = abs(true_effect - point_estimate),
+        standard_error = (true_effect - point_estimate)^2,
+        includes = if_else(CI_lower <= true_effect & CI_upper >= true_effect,
+                           1,
+                           0),
+        CI_length = CI_upper - CI_lower,
+        sig_effect = case_when(
+          CI_lower > 0 & CI_upper > 0 ~ 1,
+          CI_lower < 0 & CI_upper < 0 ~ 1,
+          CI_lower < 0 & CI_upper > 0 ~ 0
+        )
+      )
+    
+    rows = rbind(rows, row_truth)
+    
+  }
+  
+  performance_summary = rows %>% 
+    group_by(scenario, metal) %>%
+    summarize(
+        mean_point_estimate = mean(point_estimate),
+        true_effect = mean(true_effect),
+        bias = mean(abs(point_bias)),
+        relative_bias = bias / true_effect,
+        relative_perc_diff = 2 * (bias - true_effect) / (abs(bias) + abs(true_effect)),
+        variance_point_estimate = var(point_estimate),
+        RMSE = sqrt(mean(standard_error)),
+        coverage = mean(includes),
+        mean_sig_effect = mean(sig_effect),
+        avg_time = mean(time)
+      ) %>%
+    mutate(
+      power = dplyr::case_when(
+        metal %in% c(1, 5, 11) ~ mean_sig_effect,
+        !(metal %in% c(1, 5, 11)) ~ 1 - mean_sig_effect)
+    ) %>% 
+    select(scenario, metal, mean_point_estimate, bias, relative_bias, relative_perc_diff, variance_point_estimate, RMSE, coverage, power, avg_time)
+  
+  performance_summary$model_type = model_type
+  
+  return(performance_summary)
+  
+}
+```
+
+```{r, cache = TRUE}
+# Check performance
+linear_performance = model_performance(linear_results)
+elastic_net_performance = model_performance(elastic_net_results)
+mars_performance = model_performance(mars_results)
+gam1_performance = model_performance(gam1_results)
+qgcomp_performance = model_performance(qgcomp_results)
+
+all_performance = rbind(linear_performance, elastic_net_performance, mars_performance, gam1_performance, qgcomp_performance)
+```
+
+# Model Performance Viz
+
+* Scenario 1: baseline (simple exposures, simple confounding)
+* Scenario 2: complex exposures (nonlinear / interactions), simple confounding
+* Scenario 3: complex exposures (nonlinear / interactions) + multicollinearity, simple confounding
+* Scenario 4: complex exposures (trigonometric), simple confounding
+* Scenario 5: complex exposures (trigonometric) + multicollinearity, simple confounding
+* Scenario 6: simple exposures, complex confounding
+* Scenario 7: complex exposures (nonlinear / interactions), complex confounding
+* Scenario 8: complex exposures (trigonometric), complex confounding
+* Scenario 9: complex exposures (nonlinear / interactions) + multicollinearity, complex confounding
+* Scenario 10: complex exposures (trigonometric) + multicollinearity, complex confounding
+
+Note: besides confounders, only exposure metals 1 and 5 are specified in the functional form for each scenario. "Metal" 11 is the complete metal mixture.
+
+## Relative Bias
+
+```{r}
+all_performance %>% 
+  filter(metal %in% c(1,5)) %>% 
+  ggplot(aes(x = scenario, y = relative_bias, color = model_type)) + 
+  geom_point() + 
+  facet_grid(. ~ metal)
+```
+
+```{r}
+# Explorations of relative bias by scenario, all metals and models
+all_performance %>% 
+  ggplot(aes(x = model_type, y = relative_bias)) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+
+# Explorations of relative bias by scenario, only metals 1 and 5 (all models)
+all_performance %>% 
+  filter(metal %in% c(1, 5)) %>% 
+  ggplot(aes(x = model_type, y = relative_bias)) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
+
+Observations:
+* In general, lowest bias seen for scenarios 4, 5, and 6; moderate bias seen for scenarios 1, 8, and 10; higher bias seen for scenarios 2, 3, 7, and 9
+* Quantile G-Computation seems to have much higher bias in all scenarios
+* Relative bias lower for elastic net and linear models in most scenarios
+
+```{r}
+# Explorations of relative bias by scenario, metal mixture only
+all_performance %>% 
+  filter(metal == 11) %>% 
+  ggplot(aes(x = scenario, y = relative_bias, color = model_type)) + 
+  geom_point() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
+
+Observations:
+* Again, quantile g-computation has high bias across most scenarios
+* Lower bias in scenarios 4, 5, 6, 8, and 10, but higher bias in scenarios 1, 2, 3, 7, and 9
+* Linear and elastic net models perform better than expected in many cases, whereas GAM in particular tends to perform worse
+
+## RMSE
+
+```{r}
+all_performance %>% 
+  filter(metal %in% c(1,5)) %>% 
+  ggplot(aes(x = scenario, y = RMSE, color = model_type)) + 
+  geom_point() + 
+  facet_grid(. ~ metal)
+```
+
+```{r}
+# Explorations of relative bias by scenario, all metals and models
+all_performance %>% 
+  ggplot(aes(x = model_type, y = RMSE)) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+
+# Explorations of relative bias by scenario, only metals 1 and 5 (all models)
+all_performance %>% 
+  filter(metal %in% c(1, 5)) %>% 
+  ggplot(aes(x = model_type, y = RMSE)) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
+
+Observations:
+* In general, lowest RMSE seen for scenarios 1, 4, 5, and 6; moderate RMSE seen for scenarios 8 and 10; higher RMSE seen for scenarios 2, 3, 7, and 9
+* Quantile G-Computation seems to have much higher RMSE in all scenarios
+* RMSE slightly lower for elastic net and linear models in most scenarios
+
+```{r}
+# Explorations of relative bias by scenario, metal mixture only
+all_performance %>% 
+  filter(metal == 11) %>% 
+  ggplot(aes(x = scenario, y = RMSE, color = model_type)) + 
+  geom_point() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
+
+Observations:
+* Again, quantile g-computation has high RMSE across most scenarios
+* Lower RMSE in scenarios 1, 4, 5, 6, 8, and 10, but higher RMSE in scenarios 2, 3, 7, and 9
+* Linear and elastic net models perform better than expected in many cases, whereas GAM in particular tends to perform worse
+
+# Takeaways
+
+## Descriptive
+
+* Which scenarios are supposed to be less challenging for the models to estimate? *1, 2, and 4*
+* Which scenarios are in actuality less challenging for the models to estimate (i.e. seem to have lowest relative bias and RMSE)? *4, 5, 6, and perhaps 1*
+* Which scenarios are supposed to be more challenging for the models to estimate? *3, 5, 9, and 10*
+* Which scenarios are in actuality more challenging for the models to estimate (i.e. seem to have highest relative bias and RMSE)? *2, 3, 7, and 9*
+* Which scenarios are supposed to be moderately challenging for the models to estimate? *6, 7, and 8*
+* Which scenarios are supposed to be relatively similar to each other? *2 and 4; 3 and 5; 7 and 8; 9 and 10*
+
+* Scenarios we thought would be easy that actually are easy: *1 and 4*
+* Scenarios we thought would be easy that actually are challenging: *2*
+* Scenarios we thought would be challenging that actually are challenging: *3 and 9*
+* Scenarios we thought would be challenging that actually are easy: *None (potentially 6)*
+* Scenarios that perform similarly to each other we assumed would perform similarly to each other: *None*
+* Scenarios that perform similarly to each other we did not assume would perform similarly to each other: *2 and 3; 4 and 5; 7 and 9; 8 and 10*
+
+## Insights
+
+* Multicollinearity between the exposures does not seem to matter re: model performance (perhaps because limited variable selection implemented?)
+* Functional forms specified nonlinearly (polynomial) and with interaction terms are more difficult than those specified trigonometrically 
+* Complex confounding seems to add some -- but only a little bit -- of challenge for model estimation / performance
+* Linear and elastic net models seem to overperform in most scenarios, indicating that our functional forms may be too "easy" (specify more exposures?)
+
+## Recommendations
+
+* Definitely drop: scenarios 4, 5, 8, and 10
+* Consider dropping: scenarios 3 and 9 [but potentially keep because still relatively challenging]
+* For scenarios 6 and 7, find a way to introduce more complex confounding?
+* Introduce more complex functional forms, with more exposures?
+
+# Work in Progress
+
+```{r}
+# Grid of metrics (rows) x scenarios (columns)
+all_performance %>% 
+  filter(metal %in% c(1, 5, 11)) %>% 
+  pivot_longer(cols = mean_point_estimate:avg_time,
+               names_to = "metric") %>% 
+  filter(metric %in% c("relative_bias", "coverage", "power", "RMSE")) %>% 
+  ggplot(aes(x = metal, y = value, color = model_type)) + 
+  geom_point() + 
+  facet_grid(scenario ~ metric)
+```
+
