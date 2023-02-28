@@ -2,13 +2,13 @@
 title: "Model Performance Results"
 author: 'Zachary Katz (UNI: zak2132)'
 date: "2023-02-24"
-output: html_document
+output: pdf_document
 ---
 
 # Data Import & Wrangling
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
 library(tidyverse)
 ```
 
@@ -102,6 +102,403 @@ true_effects = readRDS("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/
 true_effects_mixture = readRDS("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/true_effects_mixture.RDS")
 ```
 
+# Performance Measurement
+
+* Scenario 1: baseline (simple exposures, simple confounding)
+* Scenario 2: complex exposures (nonlinear / interactions), simple confounding
+* Scenario 3: complex exposures (nonlinear / interactions) + multicollinearity, simple confounding
+* Scenario 4: complex exposures (trigonometric), simple confounding
+* Scenario 5: complex exposures (trigonometric) + multicollinearity, simple confounding
+* Scenario 6: simple exposures, complex confounding
+* Scenario 7: complex exposures (nonlinear / interactions), complex confounding
+* Scenario 8: complex exposures (trigonometric), complex confounding
+* Scenario 9: complex exposures (nonlinear / interactions) + multicollinearity, complex confounding
+* Scenario 10: complex exposures (trigonometric) + multicollinearity, complex confounding
+
+Note: besides confounders, only exposure metals 1 and 5 are specified in the functional form for each scenario. "Metal" 11 is the complete metal mixture.
+
+```{r, cache = TRUE}
+model_performance_dataset_level = function(df){
+  
+  rows = data.frame()
+  
+  df = df %>% 
+    select(scenario:model_type)
+  
+  model_type = df$model_type[1]
+  
+  for (row_num in 1:nrow(df)){
+    
+    row = df[row_num, ]
+    
+    if (as.numeric(row$metal) %in% c(1:10)){
+    
+      true_effect = true_effects[as.numeric(row$scenario), as.numeric(row$metal) + 1]
+    
+    }
+    
+    if (as.numeric(row$metal) %in% c(11)){
+    
+      true_effect = true_effects_mixture[as.numeric(row$scenario), ][, 2]
+    
+    }
+    
+    row_truth = row %>%
+      mutate(
+        true_effect = as.numeric(true_effect)
+      ) %>%
+      mutate(
+        point_bias = true_effect - point_estimate,
+        relative_bias = point_bias / true_effect,
+        standard_error = (true_effect - point_estimate)^2,
+        includes = if_else(CI_lower <= true_effect & CI_upper >= true_effect,
+                           1,
+                           0),
+        CI_length = CI_upper - CI_lower,
+        sig_effect = case_when(
+          CI_lower > 0 & CI_upper > 0 ~ 1,
+          CI_lower < 0 & CI_upper < 0 ~ 1,
+          CI_lower < 0 & CI_upper > 0 ~ 0
+        )
+      )
+    
+    rows = rbind(rows, row_truth)
+    
+  }
+  
+  return(rows)
+  
+}
+
+model_performance_scenario_level = function(df){
+  
+  rows = data.frame()
+  
+  df = df %>% 
+    select(scenario:model_type)
+  
+  model_type = df$model_type[1]
+  
+  for (row_num in 1:nrow(df)){
+    
+    row = df[row_num, ]
+    
+    if (as.numeric(row$metal) %in% c(1:10)){
+    
+      true_effect = true_effects[as.numeric(row$scenario), as.numeric(row$metal) + 1]
+    
+    }
+    
+    if (as.numeric(row$metal) %in% c(11)){
+    
+      true_effect = true_effects_mixture[as.numeric(row$scenario), ][, 2]
+    
+    }
+    
+    row_truth = row %>%
+      mutate(
+        true_effect = as.numeric(true_effect)
+      ) %>%
+      mutate(
+        point_bias = abs(true_effect - point_estimate),
+        relative_bias = point_bias / true_effect,
+        standard_error = (true_effect - point_estimate)^2,
+        includes = if_else(CI_lower <= true_effect & CI_upper >= true_effect,
+                           1,
+                           0),
+        CI_length = CI_upper - CI_lower,
+        sig_effect = case_when(
+          CI_lower > 0 & CI_upper > 0 ~ 1,
+          CI_lower < 0 & CI_upper < 0 ~ 1,
+          CI_lower < 0 & CI_upper > 0 ~ 0
+        )
+      )
+    
+    rows = rbind(rows, row_truth)
+    
+  }
+  
+  performance_summary = rows %>% 
+    group_by(scenario, metal) %>%
+    summarize(
+        RMSE = sqrt(mean(standard_error)),
+        coverage = mean(includes),
+        mean_sig_effect = mean(sig_effect),
+        avg_time = mean(time)
+      ) %>%
+    mutate(
+      power = dplyr::case_when(
+        metal %in% c(1, 5, 11) ~ mean_sig_effect,
+        !(metal %in% c(1, 5, 11)) ~ 1 - mean_sig_effect)
+    ) %>% 
+    select(scenario, metal, RMSE, coverage, power, avg_time)
+  
+  performance_summary$model_type = model_type
+  
+  return(performance_summary)
+  
+}
+```
+
+```{r, cache = TRUE, message = FALSE, warning = FALSE}
+linear_model_performance_dataset_level = model_performance_dataset_level(linear_results)
+linear_model_performance_scenario_level = model_performance_scenario_level(linear_results)
+
+elastic_net_model_performance_dataset_level = model_performance_dataset_level(elastic_net_results)
+elastic_net_model_performance_scenario_level = model_performance_scenario_level(elastic_net_results)
+
+mars_model_performance_dataset_level = model_performance_dataset_level(mars_results)
+mars_model_performance_scenario_level = model_performance_scenario_level(mars_results)
+
+gam1_model_performance_dataset_level = model_performance_dataset_level(gam1_results)
+gam1_model_performance_scenario_level = model_performance_scenario_level(gam1_results)
+
+qgcomp_model_performance_dataset_level = model_performance_dataset_level(qgcomp_results)
+qgcomp_model_performance_scenario_level = model_performance_scenario_level(qgcomp_results)
+
+dataset_level_performance = rbind(linear_model_performance_dataset_level,
+                                  elastic_net_model_performance_dataset_level,
+                                  mars_model_performance_dataset_level,
+                                  gam1_model_performance_dataset_level,
+                                  qgcomp_model_performance_dataset_level)
+
+scenario_level_performance = rbind(linear_model_performance_scenario_level,
+                                   elastic_net_model_performance_scenario_level,
+                                   mars_model_performance_scenario_level,
+                                   gam1_model_performance_scenario_level,
+                                   qgcomp_model_performance_scenario_level)
+```
+
+## Relative Bias
+
+### Data Visualizations
+
+```{r}
+# Relative bias distributions
+
+# Individual metals
+dataset_level_performance %>% 
+  filter(metal %in% c(1,5)) %>% 
+  ggplot(aes(x = model_type, y = relative_bias)) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "Distribution of Relative Bias by Scenario & Model",
+       subtitle = "For Exposures in Functional Form (Metals 1 & 5)")
+
+# Mixture
+dataset_level_performance %>% 
+  filter(metal == 11) %>% 
+  ggplot(aes(x = model_type, y = relative_bias)) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "Distribution of Relative Bias by Scenario & Model",
+       subtitle = "For Full Metal Mixture")
+```
+
+```{r}
+# Relative bias medians, grouped by metal
+
+# Individual metals
+dataset_level_performance %>% 
+  filter(metal %in% c(1,5)) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    median_relative_bias = median(relative_bias)
+  ) %>% 
+  ggplot(aes(x = model_type, y = median_relative_bias)) + 
+  geom_point() + 
+  facet_grid(metal ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Median Relative Bias by Scenario & Model, Grouped by Metal",
+       subtitle = "For Exposures in Functional Form (Metals 1 & 5)")
+
+# Mixture
+dataset_level_performance %>% 
+  filter(metal == 11) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    median_relative_bias = median(relative_bias)
+  ) %>% 
+  ggplot(aes(x = model_type, y = median_relative_bias)) + 
+  geom_point() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Median Relative Bias by Scenario & Model",
+       subtitle = "For Full Metal Mixture")
+```
+
+```{r}
+# Relative bias medians, not grouped by metal
+
+# Individual metals
+dataset_level_performance %>% 
+  filter(metal %in% c(1,5)) %>% 
+  group_by(scenario, model_type) %>% 
+  summarize(
+    median_relative_bias = median(relative_bias)
+  ) %>% 
+  ggplot(aes(x = scenario, y = median_relative_bias, color = model_type)) + 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Median Relative Bias by Scenario & Model, Not Grouped By Metal",
+       subtitle = "For Exposures in Functional Form (Metals 1 & 5)")
+
+# Mixture
+# Is same as earlier, because only one metal
+# dataset_level_performance %>% 
+#   filter(metal == 11) %>% 
+#   group_by(scenario, model_type) %>% 
+#   summarize(
+#     median_relative_bias = median(relative_bias)
+#   ) %>% 
+#   ggplot(aes(x = model_type, y = median_relative_bias)) + 
+#   geom_point() + 
+#   facet_grid(. ~ scenario) + 
+#   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
+
+### Observations
+
+* Positive relative bias (effect is overestimated) in scenarios 1-5, negative relative bias (effect is underestimated) in scenarios 6-10
+* Most variability in effect estimates for quantile g-computation
+* Scenarios 4, 5, and 6 are less challenging for the model than anticipated (4 and 5 in particular)
+* Scenarios 2 and 3; 4 and 5; 7 and 9; 8 and 10 tend to see similar performance, suggesting possible redundancy
+* Scenarios 7 and 9 appear to be more challenging for the model than 8 and 10
+* Scenarios 2 and 3 appear to be more challenging for the model and 4 and 5
+* Multicollinearity tends to substantially increase effect size estimates for quantile g-computation -- but not for aggregate mixture profiles
+* Scenarios 8 and 10 are easy for aggregate mixtures
+* Linear, elastic net, and GAM models tend to perform quite similarly; MARS tends to be a bit better, and quantile g-computation sees substantially more instability
+
+## RMSE
+
+### Data Visualizations
+
+```{r}
+# RMSE
+
+# Individual metals
+scenario_level_performance %>% 
+  filter(metal %in% c(1,5)) %>% 
+  ggplot(aes(x = metal, y = RMSE, color = model_type)) + 
+  geom_point() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "RMSE by Scenario & Model",
+       subtitle = "For Exposures in Functional Form (Metals 1 & 5)")
+
+# Individual metals, alternative viz
+scenario_level_performance %>% 
+  filter(metal %in% c(1,5)) %>% 
+  ggplot(aes(x = scenario, y = RMSE, color = model_type)) + 
+  geom_point() + 
+  facet_grid(. ~ metal) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "RMSE by Scenario & Model",
+       subtitle = "For Exposures in Functional Form (Metals 1 & 5)")
+
+# Mixture
+scenario_level_performance %>% 
+  filter(metal == 11) %>% 
+  ggplot(aes(x = scenario, y = RMSE, color = model_type)) + 
+  geom_point() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "RMSE by Scenario & Model",
+       subtitle = "For Full Metal Mixture")
+```
+
+### Observations
+
+* For metal 1, RMSE lowest for scenarios 1, 4, and 5, whereas for metal 5, RMSE lowest for 1, 2, 6, 7, and 9
+* For metal 1, RMSE highest for scenarios 2, 3, 7, and 9, whereas for metal 5, RMSE highest for scenarios 4, 5, 8, and 10
+* RMSE estimates quite similar for scenarios 2 and 3, 4 and 5, 7 and 9, and 8 and 10, again suggesting some redundancy
+* RMSE estimates much higher for quantile g-computation than for other models, even in vanilla scenario(s)
+* MARS models also tend to have slightly higher RMSE than linear, elastic net, and GAM models
+* For metal mixture, scenarios 1, 4, 5, 6, 8, and 10 see relatively low RMSE, whereas scenarios 2, 3, 7, and 9 see higher RMSE
+* Elastic net and MARS models seems to demonstrate generally best performance across scenarios for the mixture profile, whereas quantile g-computation again fares worse
+
+## Other Measures
+
+```{r}
+# Variance
+dataset_level_performance %>% 
+  filter(metal %in% c(1,5)) %>% 
+  ggplot(aes(x = model_type, y = variance)) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "Distribution of Variance by Scenario & Model",
+       subtitle = "For Exposures in Functional Form (Metals 1 & 5)")
+
+dataset_level_performance %>% 
+  filter(metal == 11) %>% 
+  ggplot(aes(x = model_type, y = variance)) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "Distribution of Variance by Scenario & Model",
+       subtitle = "For Full Metal Mixture")
+```
+
+```{r}
+# Coverage
+
+# Individual metals
+scenario_level_performance %>% 
+  filter(metal %in% c(1,5)) %>% 
+  ggplot(aes(x = metal, y = coverage, color = model_type)) + 
+  geom_point() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "Coverage by Scenario & Model",
+       subtitle = "For Exposures in Functional Form (Metals 1 & 5)")
+
+# Mixture
+scenario_level_performance %>% 
+  filter(metal == 11) %>% 
+  ggplot(aes(x = metal, y = coverage, color = model_type)) + 
+  geom_point() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "Coverage by Scenario & Model",
+       subtitle = "For Full Metal Mixture")
+```
+
+# Analysis
+
+## Descriptive
+
+* Which scenarios are supposed to be less challenging for the models to estimate? *1, 2, and 4*
+* Which scenarios are in actuality less challenging for the models to estimate (i.e. seem to have lowest relative bias and RMSE)? *4, 5, 6, and perhaps 1*
+* Which scenarios are supposed to be more challenging for the models to estimate? *3, 5, 9, and 10*
+* Which scenarios are in actuality more challenging for the models to estimate (i.e. seem to have highest relative bias and RMSE)? *2, 3, 7, and 9*
+* Which scenarios are supposed to be moderately challenging for the models to estimate? *6, 7, and 8*
+* Which scenarios are supposed to be relatively similar to each other? *2 and 4; 3 and 5; 7 and 8; 9 and 10*
+
+* Scenarios we thought would be easy that actually are easy: *1 and 4*
+* Scenarios we thought would be easy that actually are challenging: *2*
+* Scenarios we thought would be challenging that actually are challenging: *3 and 9*
+* Scenarios we thought would be challenging that actually are easy: *None (potentially 6)*
+* Scenarios that perform similarly to each other we assumed would perform similarly to each other: *None*
+* Scenarios that perform similarly to each other we did not assume would perform similarly to each other: *2 and 3; 4 and 5; 7 and 9; 8 and 10*
+
+## Performance Insights
+
+* Multicollinearity between the exposures does not seem to make much of a difference when it comes to model performance (perhaps because limited variable selection implemented?)
+* Functional forms specified nonlinearly (polynomial) and with interaction terms tend to be more difficult than those specified trigonometrically 
+* Complex confounding seems to add some -- but not *too* much -- of challenge for model estimation / performance
+* General lack of stratification in performance between linear, elastic net, and GAM models may indicate that our functional forms are a bit too "easy" (specify more exposures?) -- but perhaps this is acceptable
+
+## Recommendations
+
+* Scenarios we should probably drop: 4, 5, 8, and 10
+* Either find a way to make multicollinear scenarios more difficult, or drop scenarios 3 and 9
+* For scenarios 6 and 7, find a way to introduce more complex confounding?
+* Introduce more complex functional forms, with more exposures?
+
+# Appendix
+
 ```{r, cache = TRUE}
 model_performance = function(df){
   
@@ -189,156 +586,14 @@ qgcomp_performance = model_performance(qgcomp_results)
 all_performance = rbind(linear_performance, elastic_net_performance, mars_performance, gam1_performance, qgcomp_performance)
 ```
 
-# Model Performance Viz
-
-* Scenario 1: baseline (simple exposures, simple confounding)
-* Scenario 2: complex exposures (nonlinear / interactions), simple confounding
-* Scenario 3: complex exposures (nonlinear / interactions) + multicollinearity, simple confounding
-* Scenario 4: complex exposures (trigonometric), simple confounding
-* Scenario 5: complex exposures (trigonometric) + multicollinearity, simple confounding
-* Scenario 6: simple exposures, complex confounding
-* Scenario 7: complex exposures (nonlinear / interactions), complex confounding
-* Scenario 8: complex exposures (trigonometric), complex confounding
-* Scenario 9: complex exposures (nonlinear / interactions) + multicollinearity, complex confounding
-* Scenario 10: complex exposures (trigonometric) + multicollinearity, complex confounding
-
-Note: besides confounders, only exposure metals 1 and 5 are specified in the functional form for each scenario. "Metal" 11 is the complete metal mixture.
-
-## Relative Bias
-
-```{r}
-all_performance %>% 
-  filter(metal %in% c(1,5)) %>% 
-  ggplot(aes(x = scenario, y = relative_bias, color = model_type)) + 
-  geom_point() + 
-  facet_grid(. ~ metal)
-```
-
-```{r}
-# Explorations of relative bias by scenario, all metals and models
-all_performance %>% 
-  ggplot(aes(x = model_type, y = relative_bias)) + 
-  geom_boxplot() + 
-  facet_grid(. ~ scenario) +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
-
-# Explorations of relative bias by scenario, only metals 1 and 5 (all models)
-all_performance %>% 
-  filter(metal %in% c(1, 5)) %>% 
-  ggplot(aes(x = model_type, y = relative_bias)) + 
-  geom_boxplot() + 
-  facet_grid(. ~ scenario) +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
-```
-
-Observations:
-* In general, lowest bias seen for scenarios 4, 5, and 6; moderate bias seen for scenarios 1, 8, and 10; higher bias seen for scenarios 2, 3, 7, and 9
-* Quantile G-Computation seems to have much higher bias in all scenarios
-* Relative bias lower for elastic net and linear models in most scenarios
-
-```{r}
-# Explorations of relative bias by scenario, metal mixture only
-all_performance %>% 
-  filter(metal == 11) %>% 
-  ggplot(aes(x = scenario, y = relative_bias, color = model_type)) + 
-  geom_point() + 
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
-```
-
-Observations:
-* Again, quantile g-computation has high bias across most scenarios
-* Lower bias in scenarios 4, 5, 6, 8, and 10, but higher bias in scenarios 1, 2, 3, 7, and 9
-* Linear and elastic net models perform better than expected in many cases, whereas GAM in particular tends to perform worse
-
-## RMSE
-
-```{r}
-all_performance %>% 
-  filter(metal %in% c(1,5)) %>% 
-  ggplot(aes(x = scenario, y = RMSE, color = model_type)) + 
-  geom_point() + 
-  facet_grid(. ~ metal)
-```
-
-```{r}
-# Explorations of relative bias by scenario, all metals and models
-all_performance %>% 
-  ggplot(aes(x = model_type, y = RMSE)) + 
-  geom_boxplot() + 
-  facet_grid(. ~ scenario) +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
-
-# Explorations of relative bias by scenario, only metals 1 and 5 (all models)
-all_performance %>% 
-  filter(metal %in% c(1, 5)) %>% 
-  ggplot(aes(x = model_type, y = RMSE)) + 
-  geom_boxplot() + 
-  facet_grid(. ~ scenario) +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
-```
-
-Observations:
-* In general, lowest RMSE seen for scenarios 1, 4, 5, and 6; moderate RMSE seen for scenarios 8 and 10; higher RMSE seen for scenarios 2, 3, 7, and 9
-* Quantile G-Computation seems to have much higher RMSE in all scenarios
-* RMSE slightly lower for elastic net and linear models in most scenarios
-
-```{r}
-# Explorations of relative bias by scenario, metal mixture only
-all_performance %>% 
-  filter(metal == 11) %>% 
-  ggplot(aes(x = scenario, y = RMSE, color = model_type)) + 
-  geom_point() + 
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
-```
-
-Observations:
-* Again, quantile g-computation has high RMSE across most scenarios
-* Lower RMSE in scenarios 1, 4, 5, 6, 8, and 10, but higher RMSE in scenarios 2, 3, 7, and 9
-* Linear and elastic net models perform better than expected in many cases, whereas GAM in particular tends to perform worse
-
-# Takeaways
-
-## Descriptive
-
-* Which scenarios are supposed to be less challenging for the models to estimate? *1, 2, and 4*
-* Which scenarios are in actuality less challenging for the models to estimate (i.e. seem to have lowest relative bias and RMSE)? *4, 5, 6, and perhaps 1*
-* Which scenarios are supposed to be more challenging for the models to estimate? *3, 5, 9, and 10*
-* Which scenarios are in actuality more challenging for the models to estimate (i.e. seem to have highest relative bias and RMSE)? *2, 3, 7, and 9*
-* Which scenarios are supposed to be moderately challenging for the models to estimate? *6, 7, and 8*
-* Which scenarios are supposed to be relatively similar to each other? *2 and 4; 3 and 5; 7 and 8; 9 and 10*
-
-* Scenarios we thought would be easy that actually are easy: *1 and 4*
-* Scenarios we thought would be easy that actually are challenging: *2*
-* Scenarios we thought would be challenging that actually are challenging: *3 and 9*
-* Scenarios we thought would be challenging that actually are easy: *None (potentially 6)*
-* Scenarios that perform similarly to each other we assumed would perform similarly to each other: *None*
-* Scenarios that perform similarly to each other we did not assume would perform similarly to each other: *2 and 3; 4 and 5; 7 and 9; 8 and 10*
-
-## Insights
-
-* Multicollinearity between the exposures does not seem to matter re: model performance (perhaps because limited variable selection implemented?)
-* Functional forms specified nonlinearly (polynomial) and with interaction terms are more difficult than those specified trigonometrically 
-* Complex confounding seems to add some -- but only a little bit -- of challenge for model estimation / performance
-* Linear and elastic net models seem to overperform in most scenarios, indicating that our functional forms may be too "easy" (specify more exposures?)
-
-## Recommendations
-
-* Definitely drop: scenarios 4, 5, 8, and 10
-* Consider dropping: scenarios 3 and 9 [but potentially keep because still relatively challenging]
-* For scenarios 6 and 7, find a way to introduce more complex confounding?
-* Introduce more complex functional forms, with more exposures?
-
-# Work in Progress
-
 ```{r}
 # Grid of metrics (rows) x scenarios (columns)
-all_performance %>% 
-  filter(metal %in% c(1, 5, 11)) %>% 
-  pivot_longer(cols = mean_point_estimate:avg_time,
-               names_to = "metric") %>% 
-  filter(metric %in% c("relative_bias", "coverage", "power", "RMSE")) %>% 
-  ggplot(aes(x = metal, y = value, color = model_type)) + 
-  geom_point() + 
-  facet_grid(scenario ~ metric)
+# all_performance %>% 
+#   filter(metal %in% c(1, 5, 11)) %>% 
+#   pivot_longer(cols = mean_point_estimate:avg_time,
+#                names_to = "metric") %>% 
+#   filter(metric %in% c("relative_bias", "coverage", "power", "RMSE")) %>% 
+#   ggplot(aes(x = metal, y = value, color = model_type)) + 
+#   geom_point() + 
+#   facet_grid(scenario ~ metric)
 ```
-
