@@ -628,19 +628,19 @@ functional_forms = function(scenario, covars){
   
   if (scenario == 6){
     
-    a = 0.5*covars[1] + 0.5*covars[5] + 0.2*(covars[11])^2 + 0.2*(covars[12])^2 + 0.2*(covars[13])^2 + 0.1*covars[14] + 0.1*covars[14] + 0.1*(covars[14])*(covars[15])
+    a = 0.5*covars[1] + 0.5*covars[5] + 0.2*(covars[11])^2 + 0.2*(covars[12])^2 + 0.2*(covars[13])^2 + 0.1*covars[14] + 0.1*covars[15] + 0.1*(covars[14])*(covars[15])
     
     }
     
   if (scenario %in% c(7, 9)){
     
-    a = 0.2*(covars[1])^2 + 0.2*(covars[5])^2 + 0.1*(covars[1]*covars[5]) + 0.2*(covars[11])^2 + 0.2*(covars[12])^2 + 0.2*(covars[13])^2 + 0.1*covars[14] + 0.1*covars[14] + 0.1*(covars[14])*(covars[15])
+    a = 0.2*(covars[1])^2 + 0.2*(covars[5])^2 + 0.1*(covars[1]*covars[5]) + 0.2*(covars[11])^2 + 0.2*(covars[12])^2 + 0.2*(covars[13])^2 + 0.1*covars[14] + 0.1*covars[15] + 0.1*(covars[14])*(covars[15])
       
     }
     
   if (scenario %in% c(8, 10)){
     
-    a = 0.35*sin(covars[1]) + 0.35*sin(covars[5]) + 0.3*(covars[1])*(covars[5]) + 0.2*(covars[11])^2 + 0.2*(covars[12])^2 + 0.2*(covars[13])^2 + 0.1*covars[14] + 0.1*covars[14] + 0.1*(covars[14])*(covars[15])
+    a = 0.35*sin(covars[1]) + 0.35*sin(covars[5]) + 0.3*(covars[1])*(covars[5]) + 0.2*(covars[11])^2 + 0.2*(covars[12])^2 + 0.2*(covars[13])^2 + 0.1*covars[14] + 0.1*covars[15] + 0.1*(covars[14])*(covars[15])
 
     }
  
