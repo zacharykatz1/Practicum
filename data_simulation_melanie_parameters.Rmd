@@ -1,5 +1,5 @@
 ---
-title: "Data Simulation: New Scenario [Pressure Testing]"
+title: "Data Simulation: New Scenario Using Melanie's Parameters [Pressure Testing]"
 author: "Zachary Katz (UNI: zak2132)"
 date: "2023-03-04"
 output: html_notebook
@@ -25,62 +25,86 @@ options(dplyr.summarise.inform = FALSE)
 # Generate data
 
 ```{r}
+# Define Melanie's parameters
+
+mod_as_coefs = c(3.114051, 0.195914, -0.286263, -0.001533)
+
+mod_cd_coefs = c(1.149765, 0.492292, -0.601173, 0.003254, 0.175670)
+
+mod_mo_coefs = c(1.940379, 0.110234, 0.216759, 0.003825, 0.182579, 0.036503)
+
+mod_se_coefs = c(1.943348, 0.052137, 0.346080, 0.002652, 0.074087, 0.118370, 0.140823)
+
+mod_w_coefs = c(-3.192843, 0.091385, 0.064261, -0.001105, 0.302883, 0.097835, 0.385486, -0.265733)
+
 # Data simulation function
 
 data_simulation = function(scenario, N = 1000) {
   
-  # Create scenario to pressure test simple models (e.g. linear, elastic net)
-  # Similar to prior Scenario 7 (complex exposures [nonlinear/interaction] + complex confounding)
-  # Decrease signal from metals in functional form
-  # Increase signal from confounders
-  # Add negative interaction for metals in functional form
+  # Use Melanie's parameters
   
-  if (scenario == "Pressure Test"){
+  if (scenario == "Melanie"){
     
-    # Simulate 15 normally distributed variables: 10 exposures and 5 confounders
-    correlated_vars = rnorm_multi(
-      n = N,
-      mu = rep(x = 1, 15),
-      sd = rep(x = 0.2, 15),
-      r = 0.25,
-      varnames = c("M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "C1", "C2", "C3", "C4", "C5"),
-      empirical = FALSE
+    # Simulate confounders
+    sim_df = data.frame(
+      C1 = rbinom(N, 1, 0.5920088),
+      C2 = rnorm(N, 3.394314, 0.1934176),
+      C3 = rnorm(N, 56.12727, 8.102264),
+      C4 = rnorm(N, 0, 0.3) # correlated noise
     )
     
-    # Confound M1 and M2 with more complexity than before
-    M1 = rnorm(
-          N, 
-          mean = sin(0.2*correlated_vars[, 11] + 0.2*correlated_vars[, 12] + 0.2*correlated_vars[, 13] +
-                    0.2*correlated_vars[, 14] + 0.2*correlated_vars[, 15]) + 0.8*correlated_vars[, 1],
-          sd = 0.2
-        )
-  
-    M2 = rnorm(
-          N, 
-          mean = sin(0.2*correlated_vars[, 11] + 0.2*correlated_vars[, 12] + 0.2*correlated_vars[, 13] +
-                    0.2*correlated_vars[, 14] + 0.2*correlated_vars[, 15]) + 0.8*correlated_vars[, 2],
-          sd = 0.2
-        )  
+    sim_df$C1 = as.numeric(sim_df$C1)
     
-    sim_df = data.frame(M1, M2, correlated_vars[, 3:15])
-    colnames(sim_df[, 1:10]) = paste("exposure_", 1:10, sep = "") 
-    colnames(sim_df[, 11:15]) = paste("confounder_", 1:5, sep = "")
+    sim_df$M1 = model.matrix(~., sim_df) %*% c(mod_as_coefs, 1) + 
+      rnorm(N, 0, 0.7090138) # Do I need to add confounding directly from C1, C2, C3, etc.?
     
-    # Simulate nonlinear effect with interactions from two exposures (M1, M5) and nonlinear effect with interactions from five confounders (C1, C2, C3, C4, C5)
-    # M1 is confounded with C1-5, M5 is not
-    # M2 is correlated with C1-5, but has no direct effect on outcome (spurious association)
-    hfunY = function(z) h_fun_Y(z, ind1 = 1, ind2 = 5, ind3 = 11, ind4 = 12, ind5 = 13, ind6 = 14, ind7 = 15) 
+    sim_df$M2 = model.matrix(~., sim_df) %*% c(mod_cd_coefs[1:4], 1, mod_cd_coefs[5]) + 
+      rnorm(N, 0, 0.6891941)
+    
+    sim_df$M3 = model.matrix(~., sim_df) %*% c(mod_mo_coefs[1:4], 1, mod_mo_coefs[5:6]) + 
+      rnorm(N, 0, 0.6150645)
+    
+    sim_df$M4 = model.matrix(~., sim_df) %*% c(mod_se_coefs[1:4], 1, mod_se_coefs[5:7]) + 
+      rnorm(N, 0, 0.4512169)
+    
+    sim_df$M5 = model.matrix(~., sim_df) %*% c(mod_w_coefs[1:4], 1, mod_w_coefs[5:8]) + 
+      rnorm(N, 0, 1.050844)
+    
+    sim_df$M6 = model.matrix(~., sim_df) %*% c(mod_w_coefs[1:4], 1, mod_w_coefs[5:8], 0.12) + 
+      rnorm(N, 0, 0.65)
+    
+    sim_df$M7 = model.matrix(~., sim_df) %*% c(mod_se_coefs[1:4], 1, mod_se_coefs[5:7], rep(0.1, 3)) + 
+      rnorm(N, 0, 0.65)
+    
+    sim_df$M8 = model.matrix(~., sim_df) %*% c(mod_mo_coefs[1:4], 1, mod_mo_coefs[5:6], rep(0.07, 5)) + 
+      rnorm(N, 0, 0.65)
+    
+    sim_df$M9 = model.matrix(~., sim_df) %*% c(mod_cd_coefs[1:4], 1, mod_cd_coefs[5], rep(0.05, 7)) + 
+      rnorm(N, 0, 0.65)
+    
+    sim_df$M10 = model.matrix(~., sim_df) %*% c(mod_as_coefs, 1, rep(0.08, 9)) + 
+      rnorm(N, 0, 0.65)
+    
+    # Define one last confounder similar to C2
+    sim_df$C5 = rnorm(N, 3.394314, 0.1934176)
+    
+    # Re-order columns
+    sim_df = sim_df %>% 
+      dplyr::select(M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, C1, C2, C3, C4, C5)
+    
+    # Simulate outcome with functional form specified by M1, M5, and four of the five confounders
+    hfunY = function(z) h_fun_Y(z, ind1 = 1, ind2 = 5, ind3 = 11, ind4 = 12, ind5 = 14, ind6 = 15) 
     h_fun_Y = function(z, ind1, ind2, ind3, ind4, ind5, ind6, ind7) {
       
-        0.1*(z[ind1])^2 + 0.1*(z[ind2])^2 - 0.3*(z[ind1])*(z[ind2]) + # Complex exposure effect (nonlinear/interaction)
-        0.6*(z[ind3])^2 + 0.6*(z[ind4])^2 + 0.6*(z[ind5])^2 + 0.6*z[ind6] + 0.6*z[ind7] + # Quadratic confounding effect from C1-3
-        0.5*(z[ind6])*(z[ind7]) # Interactive confounding effect from C4, C5
+        0.1*(z[ind1])^2 + 0.1*(z[ind2])^2 - 0.1*(z[ind1])*(z[ind2]) + # Complex exposure effect (nonlinear/interaction)
+        0.6*(z[ind3])^2 + 0.6*(z[ind4])^2 + 0.6*z[ind5] + 0.6*z[ind6] + # Quadratic confounding effect from C1, C2
+        0.5*(z[ind5])*(z[ind6]) # Interactive confounding effect from C4, C5
     }
     
     sim_df$hY = apply(sim_df, 1, hfunY) 
     
     # Add noise
-    epsY = rnorm(N, mean = 1, sd = 0.2)
+    epsY = rnorm(N, mean = 5, sd = 2)
     sim_df$Y = with(sim_df, hY + epsY)
     
     # Remove unused columns
@@ -95,7 +119,7 @@ data_simulation = function(scenario, N = 1000) {
 }
 
 # Check correlations
-data = data_simulation(scenario = "Pressure Test", N = 1000)
+data = data_simulation(scenario = "Melanie", N = 1000)
 corr = cor(data)
 corrplot(corr, type = "upper")
 ```
@@ -105,9 +129,10 @@ corrplot(corr, type = "upper")
 
 functional_forms = function(scenario, covars){
 
-  if (scenario == "Pressure Test"){
+  if (scenario == "Melanie"){
     
-    a = 0.1*(covars[1])^2 + 0.1*(covars[5])^2 - 0.3*(covars[1]*covars[5]) + 0.6*(covars[11])^2 + 0.6*(covars[12])^2 + 0.6*(covars[13])^2 + 0.6*covars[14] + 0.6*covars[15] + 0.5*(covars[14])*(covars[15])
+    a = 0.1*(covars[1])^2 + 0.1*(covars[5])^2 - 0.1*(covars[1]*covars[5]) + 
+      0.6*(covars[11])^2 + 0.6*(covars[12])^2 + 0.6*covars[14] + 0.6*covars[15] + 0.5*(covars[14])*(covars[15])
       
     }
 
@@ -123,7 +148,7 @@ N = 1000 # number of observations per data set
 
 simulated_data = list()
 
-for (scenario in "Pressure Test"){
+for (scenario in "Melanie"){
   
   simulated_data_loop = lapply(1:M, function(i) data_simulation(scenario = scenario, N = N))
   
@@ -149,7 +174,7 @@ quantiles = data.frame()
 
 set.seed(2132)
 
-for (i in "Pressure Test"){
+for (i in "Melanie"){
   
   for (j in 1:1000){
     
@@ -222,7 +247,7 @@ metal_IQR_effect = function(scenario, metal){
 # Calculate true effects
 true_effects = data.frame()
 
-for (scenario_i in "Pressure Test"){
+for (scenario_i in "Melanie"){
   
   for (metal_j in 1:10){
     
@@ -292,7 +317,7 @@ metal_IQR_mix_effect = function(scenario){
 # Calculate true effects
 true_effects_mixture = data.frame()
 
-for (scenario in "Pressure Test"){
+for (scenario in "Melanie"){
     
     effect = metal_IQR_mix_effect(scenario)
     true_effects_mixture = bind_rows(
@@ -821,13 +846,14 @@ model_fnct = function(datasets_count, metals_count, boot_count, model_type){
   
   estimates = data.frame()
   
-  for (i in "Pressure Test"){
+  for (i in "Melanie"){
     
     datasets = data.frame()
     
     for (j in 1:datasets_count){
       
       data = simulated_data[[j]] %>% as.data.frame() %>% dplyr::select(M1:Y)
+      data = lapply(data, as.numeric) %>% as.data.frame()
       
       model_fits = model_fit_fnct(model_type, data)
       
@@ -973,7 +999,7 @@ model_fnct = function(datasets_count, metals_count, boot_count, model_type){
 # Linear model
 set.seed(2132)
 t1 = Sys.time()
-linear_df = model_fnct(datasets_count = 400, metals_count = 10, boot_count = 100, model_type = "linear")
+linear_df = model_fnct(datasets_count = 100, metals_count = 10, boot_count = 25, model_type = "linear")
 t2 = Sys.time()
 linear_time = t2 - t1
 ```

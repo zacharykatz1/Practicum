@@ -1,0 +1,239 @@
+---
+title: "Model Performance Results: New Models"
+author: 'Zachary Katz (UNI: zak2132)'
+date: "2023-03-06"
+output: pdf_document
+---
+
+# Data Import & Wrangling
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+```
+
+```{r, cache = TRUE, message = FALSE, warning = FALSE}
+# Import model results
+
+# BART model
+setwd("~/Desktop/Remaining Models for Scenario 1/Scenario 1 outputs/BART") 
+bart_results = list.files(path = "~/Desktop/Remaining Models for Scenario 1/Scenario 1 outputs/BART",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% 
+  distinct() %>% 
+  select(-dataset, -time)
+
+# BKMR1 model
+setwd("~/Desktop/Remaining Models for Scenario 1/Scenario 1 outputs/BKMR1")
+bkmr1_results = list.files(path = "~/Desktop/Remaining Models for Scenario 1/Scenario 1 outputs/BKMR1",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>%
+  distinct() %>% 
+  select(-dataset, -time)
+
+# SuperLearner model
+setwd("~/Desktop/Remaining Models for Scenario 1/Scenario 1 outputs/SuperLearner")
+superlearner_results = list.files(path = "~/Desktop/Remaining Models for Scenario 1/Scenario 1 outputs/SuperLearner",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>%
+  distinct() %>% 
+  select(-dataset, -time)
+
+# Random Forest model
+setwd("~/Desktop/Remaining Models for Scenario 1/Scenario 1 outputs/Random Forest")
+random_forest_results = list.files(path = "~/Desktop/Remaining Models for Scenario 1/Scenario 1 outputs/Random Forest",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>%
+  distinct() %>% 
+  select(-dataset, -time)
+
+# Causal Forest model
+setwd("~/Desktop/Causal Forest/Results/Scenario 1")
+causal_forest_results = list.files(path = "~/Desktop/Causal Forest/Results/Scenario 1",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>%
+  distinct() %>% 
+  select(-dataset, -time)
+```
+
+```{r}
+# Load in true effects
+true_effects = readRDS("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/true_effects.RDS")
+true_effects_mixture = readRDS("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/true_effects_mixture.RDS")
+```
+
+```{r, cache = TRUE}
+model_performance_dataset_level = function(df){
+  
+  rows = data.frame()
+  
+  df = df %>% 
+    select(scenario:model_type)
+  
+  model_type = df$model_type[1]
+  
+  for (row_num in 1:nrow(df)){
+    
+    row = df[row_num, ]
+    
+    if (as.numeric(row$metal) %in% c(1:10)){
+    
+      true_effect = true_effects[as.numeric(row$scenario), as.numeric(row$metal) + 1]
+    
+    }
+    
+    if (as.numeric(row$metal) %in% c(11)){
+    
+      true_effect = true_effects_mixture[as.numeric(row$scenario), ][, 2]
+    
+    }
+    
+    row_truth = row %>%
+      mutate(
+        true_effect = as.numeric(true_effect)
+      ) %>%
+      mutate(
+        point_bias = true_effect - point_estimate,
+        relative_bias = point_bias / true_effect,
+        standard_error = (true_effect - point_estimate)^2,
+        includes = if_else(CI_lower <= true_effect & CI_upper >= true_effect,
+                           1,
+                           0),
+        CI_length = CI_upper - CI_lower,
+        sig_effect = case_when(
+          CI_lower > 0 & CI_upper > 0 ~ 1,
+          CI_lower < 0 & CI_upper < 0 ~ 1,
+          CI_lower < 0 & CI_upper > 0 ~ 0
+        )
+      )
+    
+    rows = rbind(rows, row_truth)
+    
+  }
+  
+  return(rows)
+  
+}
+
+model_performance_scenario_level = function(df){
+  
+  rows = data.frame()
+  
+  df = df %>% 
+    select(scenario:model_type)
+  
+  model_type = df$model_type[1]
+  
+  for (row_num in 1:nrow(df)){
+    
+    row = df[row_num, ]
+    
+    if (as.numeric(row$metal) %in% c(1:10)){
+    
+      true_effect = true_effects[as.numeric(row$scenario), as.numeric(row$metal) + 1]
+    
+    }
+    
+    if (as.numeric(row$metal) %in% c(11)){
+    
+      true_effect = true_effects_mixture[as.numeric(row$scenario), ][, 2]
+    
+    }
+    
+    row_truth = row %>%
+      mutate(
+        true_effect = as.numeric(true_effect)
+      ) %>%
+      mutate(
+        point_bias = abs(true_effect - point_estimate),
+        relative_bias = point_bias / true_effect,
+        standard_error = (true_effect - point_estimate)^2,
+        includes = if_else(CI_lower <= true_effect & CI_upper >= true_effect,
+                           1,
+                           0),
+        CI_length = CI_upper - CI_lower,
+        sig_effect = case_when(
+          CI_lower > 0 & CI_upper > 0 ~ 1,
+          CI_lower < 0 & CI_upper < 0 ~ 1,
+          CI_lower < 0 & CI_upper > 0 ~ 0
+        )
+      )
+    
+    rows = rbind(rows, row_truth)
+    
+  }
+  
+  performance_summary = rows %>% 
+    group_by(scenario, metal) %>%
+    summarize(
+        RMSE = sqrt(mean(standard_error)),
+        coverage = mean(includes),
+        mean_sig_effect = mean(sig_effect)
+      ) %>%
+    mutate(
+      power = dplyr::case_when(
+        metal %in% c(1, 5, 11) ~ mean_sig_effect,
+        !(metal %in% c(1, 5, 11)) ~ 1 - mean_sig_effect)
+    ) %>% 
+    select(scenario, metal, RMSE, coverage, power)
+  
+  performance_summary$model_type = model_type
+  
+  return(performance_summary)
+  
+}
+```
+
+```{r, cache = TRUE, message = FALSE, warning = FALSE}
+bart_model_performance_dataset_level = model_performance_dataset_level(bart_results)
+bart_model_performance_scenario_level = model_performance_scenario_level(bart_results)
+
+bkmr1_model_performance_dataset_level = model_performance_dataset_level(bkmr1_results)
+bkmr1_model_performance_scenario_level = model_performance_scenario_level(bkmr1_results)
+
+superlearner_model_performance_dataset_level = model_performance_dataset_level(superlearner_model_performance_dataset_level_results)
+superlearner_model_performance_dataset_level_model_performance_scenario_level = model_performance_scenario_level(superlearner_model_performance_dataset_level_results)
+
+random_forest_model_performance_dataset_level = model_performance_dataset_level(random_forest_results)
+random_forest_model_performance_scenario_level = model_performance_scenario_level(random_forest_results)
+
+causal_forest_model_performance_dataset_level = model_performance_dataset_level(causal_forest_results)
+causal_forest_model_performance_scenario_level = model_performance_scenario_level(causal_forest_results)
+
+dataset_level_performance = rbind(bart_model_performance_dataset_level,
+                                  bkmr1_model_performance_dataset_level,
+                                  superlearner_model_performance_dataset_level,
+                                  random_forest_model_performance_dataset_level,
+                                  causal_forest_model_performance_dataset_level)
+
+scenario_level_performance = rbind(bart_model_performance_scenario_level,
+                                   bkmr1_model_performance_scenario_level,
+                                   superlearner_model_performance_scenario_level,
+                                   random_forest_model_performance_scenario_level,
+                                   causal_forest_model_performance_scenario_level)
+```
