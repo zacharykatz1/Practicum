@@ -1,0 +1,527 @@
+---
+title: "Evaluating Bias with Reduced Bootstrapping or Sample Size"
+author: 'Zachary Katz (UNI: zak2132)'
+date: "2023-03-118"
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, cache = TRUE)
+library(tidyverse)
+```
+
+```{r, cache = TRUE, message = FALSE, warning = FALSE}
+# Import model results
+
+# Linear model, 100 boots
+setwd("~/Desktop/Scenarios 11 & 12/Linear")
+linear_results_100boots = list.files(path = "~/Desktop/Scenarios 11 & 12/Linear",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time / 60 # time in minutes
+  ) %>% 
+  distinct() %>% 
+  select(-dataset) %>% 
+  mutate(
+    bootstraps = 100
+  )
+
+# Elastic net model, 100 boots
+setwd("~/Desktop/Scenarios 11 & 12/Elastic Net")
+elastic_net_results_100boots = list.files(path = "~/Desktop/Scenarios 11 & 12/Elastic Net",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct() %>% 
+  select(-dataset) %>% 
+  mutate(
+    bootstraps = 100
+  )
+
+# Causal Forest model, 100 boots
+setwd("~/Desktop/Scenarios 11 & 12/Causal Forest")
+causal_forest_results_100boots = list.files(path = "~/Desktop/Scenarios 11 & 12/Causal Forest",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct() %>% 
+  select(-dataset) %>% 
+  mutate(
+    bootstraps = 100
+  )
+
+# Linear model, 50 boots
+setwd("~/Desktop/Scenarios 11 & 12/Linear_Boot_Tests/50 bootstraps")
+linear_results_50boots = list.files(path = "~/Desktop/Scenarios 11 & 12/Linear_Boot_Tests/50 bootstraps",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time / 60 # time in minutes
+  ) %>% 
+  distinct() %>% 
+  select(-dataset) %>% 
+  mutate(
+    bootstraps = 50
+  )
+
+# Elastic net model, 50 boots
+setwd("~/Desktop/Scenarios 11 & 12/Elastic_Net_Boot_Tests/50 bootstraps")
+elastic_net_results_50boots = list.files(path = "~/Desktop/Scenarios 11 & 12/Elastic_Net_Boot_Tests/50 bootstraps",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct() %>% 
+  select(-dataset) %>% 
+  mutate(
+    bootstraps = 50
+  )
+
+# Linear model, 25 boots
+setwd("~/Desktop/Scenarios 11 & 12/Linear_Boot_Tests/25 bootstraps")
+linear_results_25boots = list.files(path = "~/Desktop/Scenarios 11 & 12/Linear_Boot_Tests/25 bootstraps",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time / 60 # time in minutes
+  ) %>% 
+  distinct() %>% 
+  select(-dataset) %>% 
+  mutate(
+    bootstraps = 25
+  )
+
+# Elastic net model, 25 boots
+setwd("~/Desktop/Scenarios 11 & 12/Elastic_Net_Boot_Tests/25 bootstraps")
+elastic_net_results_25boots = list.files(path = "~/Desktop/Scenarios 11 & 12/Elastic_Net_Boot_Tests/25 bootstraps",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct() %>% 
+  select(-dataset) %>% 
+  mutate(
+    bootstraps = 25
+  )
+```
+
+```{r}
+# Load in true effects
+true_effects = readRDS("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/true_effects_new.RDS")
+true_effects_mixture = readRDS("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/true_effects_mixture_new.RDS")
+```
+
+```{r}
+model_performance_dataset_level = function(df){
+  
+  rows = data.frame()
+  
+  df = df %>% 
+    select(scenario:model_type)
+  
+  model_type = df$model_type[1]
+  
+  for (row_num in 1:nrow(df)){
+    
+    row = df[row_num, ]
+    
+    if (as.numeric(row$metal) %in% c(1:10)){
+    
+      true_effect = true_effects[as.numeric(row$scenario), as.numeric(row$metal) + 1]
+    
+    }
+    
+    if (as.numeric(row$metal) %in% c(11)){
+    
+      true_effect = true_effects_mixture[as.numeric(row$scenario), ][, 2]
+    
+    }
+    
+    row_truth = row %>%
+      mutate(
+        true_effect = as.numeric(true_effect)
+      ) %>%
+      mutate(
+        point_bias = true_effect - point_estimate,
+        relative_bias = point_bias / true_effect,
+        standard_error = (true_effect - point_estimate)^2,
+        includes = if_else(CI_lower <= true_effect & CI_upper >= true_effect,
+                           1,
+                           0),
+        CI_length = CI_upper - CI_lower,
+        sig_effect = case_when(
+          CI_lower > 0 & CI_upper > 0 ~ 1,
+          CI_lower < 0 & CI_upper < 0 ~ 1,
+          CI_lower < 0 & CI_upper > 0 ~ 0
+        )
+      )
+    
+    rows = rbind(rows, row_truth)
+    
+  }
+  
+  return(rows)
+  
+}
+
+model_performance_scenario_level = function(df){
+  
+  rows = data.frame()
+  
+  df = df %>% 
+    select(scenario:model_type)
+  
+  model_type = df$model_type[1]
+  
+  for (row_num in 1:nrow(df)){
+    
+    row = df[row_num, ]
+    
+    if (as.numeric(row$metal) %in% c(1:10)){
+    
+      true_effect = true_effects[as.numeric(row$scenario), as.numeric(row$metal) + 1]
+    
+    }
+    
+    if (as.numeric(row$metal) %in% c(11)){
+    
+      true_effect = true_effects_mixture[as.numeric(row$scenario), ][, 2]
+    
+    }
+    
+    row_truth = row %>%
+      mutate(
+        true_effect = as.numeric(true_effect)
+      ) %>%
+      mutate(
+        point_bias = abs(true_effect - point_estimate),
+        relative_bias = point_bias / true_effect,
+        standard_error = (true_effect - point_estimate)^2,
+        includes = if_else(CI_lower <= true_effect & CI_upper >= true_effect,
+                           1,
+                           0),
+        CI_length = CI_upper - CI_lower,
+        sig_effect = case_when(
+          CI_lower > 0 & CI_upper > 0 ~ 1,
+          CI_lower < 0 & CI_upper < 0 ~ 1,
+          CI_lower < 0 & CI_upper > 0 ~ 0
+        )
+      )
+    
+    rows = rbind(rows, row_truth)
+    
+  }
+  
+  performance_summary = rows %>% 
+    group_by(scenario, metal) %>%
+    summarize(
+        RMSE = sqrt(mean(standard_error)),
+        coverage = mean(includes),
+        mean_sig_effect = mean(sig_effect),
+        avg_time = mean(time)
+      ) %>%
+    mutate(
+      power = dplyr::case_when(
+        metal %in% c(1, 2, 3, 4, 5, 11) ~ mean_sig_effect,
+        !(metal %in% c(1, 2, 3, 4, 5, 11)) ~ 1 - mean_sig_effect)
+    ) %>% 
+    select(scenario, metal, RMSE, coverage, power, avg_time)
+  
+  performance_summary$model_type = model_type
+  
+  return(performance_summary)
+  
+}
+```
+
+
+```{r}
+# Performance stats
+linear_results_100boots_performance = model_performance_dataset_level(linear_results_100boots)
+linear_results_50boots_performance = model_performance_dataset_level(linear_results_50boots)
+linear_results_25boots_performance = model_performance_dataset_level(linear_results_25boots)
+elastic_net_results_100boots_performance = model_performance_dataset_level(elastic_net_results_100boots)
+elastic_net_results_50boots_performance = model_performance_dataset_level(elastic_net_results_50boots)
+elastic_net_results_25boots_performance = model_performance_dataset_level(elastic_net_results_25boots)
+```
+
+```{r}
+# Function for random draws of N datasets, focusing on aggregate mixture profile
+
+draw_function = function(scenario_num, results, N) {
+  
+  model_scen = results %>% filter(scenario == scenario_num & metal == 11)
+  
+  set.seed(2132)
+  scen_indices = sample(1:nrow(model_scen), N)
+  
+  model_rows_sampled = model_scen[scen_indices, ]
+
+  return(model_rows_sampled)
+  
+}
+```
+
+```{r}
+# Perform random draws for linear and elastic net models
+
+linear_100boots_100datasets_scen11 = draw_function(scenario_num = 11, results = linear_results_100boots_performance, N = 100)
+linear_100boots_200datasets_scen11 = draw_function(scenario_num = 11, results = linear_results_100boots_performance, N = 200)
+linear_100boots_300datasets_scen11 = draw_function(scenario_num = 11, results = linear_results_100boots_performance, N = 300)
+linear_100boots_400datasets_scen11 = draw_function(scenario_num = 11, results = linear_results_100boots_performance, N = 400)
+enet_100boots_100datasets_scen11 = draw_function(scenario_num = 11, results = elastic_net_results_100boots_performance, N = 100)
+enet_100boots_200datasets_scen11 = draw_function(scenario_num = 11, results = elastic_net_results_100boots_performance, N = 200)
+enet_100boots_300datasets_scen11 = draw_function(scenario_num = 11, results = elastic_net_results_100boots_performance, N = 300)
+enet_100boots_400datasets_scen11 = draw_function(scenario_num = 11, results = elastic_net_results_100boots_performance, N = 400)
+linear_50boots_100datasets_scen11 = draw_function(scenario_num = 11, results = linear_results_50boots_performance, N = 100)
+linear_50boots_200datasets_scen11 = draw_function(scenario_num = 11, results = linear_results_50boots_performance, N = 200)
+linear_50boots_300datasets_scen11 = draw_function(scenario_num = 11, results = linear_results_50boots_performance, N = 300)
+linear_50boots_400datasets_scen11 = draw_function(scenario_num = 11, results = linear_results_50boots_performance, N = 400)
+enet_50boots_100datasets_scen11 = draw_function(scenario_num = 11, results = elastic_net_results_50boots_performance, N = 100)
+enet_50boots_200datasets_scen11 = draw_function(scenario_num = 11, results = elastic_net_results_50boots_performance, N = 200)
+enet_50boots_300datasets_scen11 = draw_function(scenario_num = 11, results = elastic_net_results_50boots_performance, N = 300)
+enet_50boots_400datasets_scen11 = draw_function(scenario_num = 11, results = elastic_net_results_50boots_performance, N = 400)
+linear_25boots_100datasets_scen11 = draw_function(scenario_num = 11, results = linear_results_25boots_performance, N = 100)
+linear_25boots_200datasets_scen11 = draw_function(scenario_num = 11, results = linear_results_25boots_performance, N = 200)
+linear_25boots_300datasets_scen11 = draw_function(scenario_num = 11, results = linear_results_25boots_performance, N = 300)
+linear_25boots_400datasets_scen11 = draw_function(scenario_num = 11, results = linear_results_25boots_performance, N = 400)
+enet_25boots_100datasets_scen11 = draw_function(scenario_num = 11, results = elastic_net_results_25boots_performance, N = 100)
+enet_25boots_200datasets_scen11 = draw_function(scenario_num = 11, results = elastic_net_results_25boots_performance, N = 200)
+enet_25boots_300datasets_scen11 = draw_function(scenario_num = 11, results = elastic_net_results_25boots_performance, N = 300)
+enet_25boots_400datasets_scen11 = draw_function(scenario_num = 11, results = elastic_net_results_25boots_performance, N = 400)
+
+linear_100boots_100datasets_scen12 = draw_function(scenario_num = 12, results = linear_results_100boots_performance, N = 100)
+linear_100boots_200datasets_scen12 = draw_function(scenario_num = 12, results = linear_results_100boots_performance, N = 200)
+linear_100boots_300datasets_scen12 = draw_function(scenario_num = 12, results = linear_results_100boots_performance, N = 300)
+linear_100boots_400datasets_scen12 = draw_function(scenario_num = 12, results = linear_results_100boots_performance, N = 400)
+enet_100boots_100datasets_scen12 = draw_function(scenario_num = 12, results = elastic_net_results_100boots_performance, N = 100)
+enet_100boots_200datasets_scen12 = draw_function(scenario_num = 12, results = elastic_net_results_100boots_performance, N = 200)
+enet_100boots_300datasets_scen12 = draw_function(scenario_num = 12, results = elastic_net_results_100boots_performance, N = 300)
+enet_100boots_400datasets_scen12 = draw_function(scenario_num = 12, results = elastic_net_results_100boots_performance, N = 400)
+linear_50boots_100datasets_scen12 = draw_function(scenario_num = 12, results = linear_results_50boots_performance, N = 100)
+linear_50boots_200datasets_scen12 = draw_function(scenario_num = 12, results = linear_results_50boots_performance, N = 200)
+linear_50boots_300datasets_scen12 = draw_function(scenario_num = 12, results = linear_results_50boots_performance, N = 300)
+linear_50boots_400datasets_scen12 = draw_function(scenario_num = 12, results = linear_results_50boots_performance, N = 400)
+enet_50boots_100datasets_scen12 = draw_function(scenario_num = 12, results = elastic_net_results_50boots_performance, N = 100)
+enet_50boots_200datasets_scen12 = draw_function(scenario_num = 12, results = elastic_net_results_50boots_performance, N = 200)
+enet_50boots_300datasets_scen12 = draw_function(scenario_num = 12, results = elastic_net_results_50boots_performance, N = 300)
+enet_50boots_400datasets_scen12 = draw_function(scenario_num = 12, results = elastic_net_results_50boots_performance, N = 400)
+linear_25boots_100datasets_scen12 = draw_function(scenario_num = 12, results = linear_results_25boots_performance, N = 100)
+linear_25boots_200datasets_scen12 = draw_function(scenario_num = 12, results = linear_results_25boots_performance, N = 200)
+linear_25boots_300datasets_scen12 = draw_function(scenario_num = 12, results = linear_results_25boots_performance, N = 300)
+linear_25boots_400datasets_scen12 = draw_function(scenario_num = 12, results = linear_results_25boots_performance, N = 400)
+enet_25boots_100datasets_scen12 = draw_function(scenario_num = 12, results = elastic_net_results_25boots_performance, N = 100)
+enet_25boots_200datasets_scen12 = draw_function(scenario_num = 12, results = elastic_net_results_25boots_performance, N = 200)
+enet_25boots_300datasets_scen12 = draw_function(scenario_num = 12, results = elastic_net_results_25boots_performance, N = 300)
+enet_25boots_400datasets_scen12 = draw_function(scenario_num = 12, results = elastic_net_results_25boots_performance, N = 400)
+```
+
+```{r}
+# Bind datasets
+
+median_and_mean_relative_bias_eval = function(df){
+  
+  length = nrow(df)
+  model_type = df$model_type %>% head(1)
+  
+  df = df %>% 
+    dplyr::select(scenario, metal, relative_bias) %>% 
+    mutate(
+      datasets = length
+    ) %>% 
+    group_by(scenario) %>% 
+    summarize(
+      mean_relative_bias = mean(relative_bias),
+      median_relative_bias = median(relative_bias)
+    ) 
+  
+  df$datasets = length
+  df$model_type = model_type
+  
+  return(df)
+  
+}
+```
+
+```{r}
+# Calculate mean and median relative bias
+
+bias_linear_100boots_100datasets_scen11 = median_and_mean_relative_bias_eval(linear_100boots_100datasets_scen11)
+bias_linear_100boots_200datasets_scen11 = median_and_mean_relative_bias_eval(linear_100boots_200datasets_scen11)
+bias_linear_100boots_300datasets_scen11 = median_and_mean_relative_bias_eval(linear_100boots_300datasets_scen11)
+bias_linear_100boots_400datasets_scen11 = median_and_mean_relative_bias_eval(linear_100boots_400datasets_scen11)
+bias_linear_50boots_100datasets_scen11 = median_and_mean_relative_bias_eval(linear_50boots_100datasets_scen11)
+bias_linear_50boots_200datasets_scen11 = median_and_mean_relative_bias_eval(linear_50boots_200datasets_scen11)
+bias_linear_50boots_300datasets_scen11 = median_and_mean_relative_bias_eval(linear_50boots_300datasets_scen11)
+bias_linear_50boots_400datasets_scen11 = median_and_mean_relative_bias_eval(linear_50boots_400datasets_scen11)
+bias_linear_25boots_100datasets_scen11 = median_and_mean_relative_bias_eval(linear_25boots_100datasets_scen11)
+bias_linear_25boots_200datasets_scen11 = median_and_mean_relative_bias_eval(linear_25boots_200datasets_scen11)
+bias_linear_25boots_300datasets_scen11 = median_and_mean_relative_bias_eval(linear_25boots_300datasets_scen11)
+bias_linear_25boots_400datasets_scen11 = median_and_mean_relative_bias_eval(linear_25boots_400datasets_scen11)
+
+bias_enet_100boots_100datasets_scen11 = median_and_mean_relative_bias_eval(enet_100boots_100datasets_scen11)
+bias_enet_100boots_200datasets_scen11 = median_and_mean_relative_bias_eval(enet_100boots_200datasets_scen11)
+bias_enet_100boots_300datasets_scen11 = median_and_mean_relative_bias_eval(enet_100boots_300datasets_scen11)
+bias_enet_100boots_400datasets_scen11 = median_and_mean_relative_bias_eval(enet_100boots_400datasets_scen11)
+bias_enet_50boots_100datasets_scen11 = median_and_mean_relative_bias_eval(enet_50boots_100datasets_scen11)
+bias_enet_50boots_200datasets_scen11 = median_and_mean_relative_bias_eval(enet_50boots_200datasets_scen11)
+bias_enet_50boots_300datasets_scen11 = median_and_mean_relative_bias_eval(enet_50boots_300datasets_scen11)
+bias_enet_50boots_400datasets_scen11 = median_and_mean_relative_bias_eval(enet_50boots_400datasets_scen11)
+bias_enet_25boots_100datasets_scen11 = median_and_mean_relative_bias_eval(enet_25boots_100datasets_scen11)
+bias_enet_25boots_200datasets_scen11 = median_and_mean_relative_bias_eval(enet_25boots_200datasets_scen11)
+bias_enet_25boots_300datasets_scen11 = median_and_mean_relative_bias_eval(enet_25boots_300datasets_scen11)
+bias_enet_25boots_400datasets_scen11 = median_and_mean_relative_bias_eval(enet_25boots_400datasets_scen11)
+
+bias_linear_100boots_100datasets_scen12 = median_and_mean_relative_bias_eval(linear_100boots_100datasets_scen12)
+bias_linear_100boots_200datasets_scen12 = median_and_mean_relative_bias_eval(linear_100boots_200datasets_scen12)
+bias_linear_100boots_300datasets_scen12 = median_and_mean_relative_bias_eval(linear_100boots_300datasets_scen12)
+bias_linear_100boots_400datasets_scen12 = median_and_mean_relative_bias_eval(linear_100boots_400datasets_scen12)
+bias_linear_50boots_100datasets_scen12 = median_and_mean_relative_bias_eval(linear_50boots_100datasets_scen12)
+bias_linear_50boots_200datasets_scen12 = median_and_mean_relative_bias_eval(linear_50boots_200datasets_scen12)
+bias_linear_50boots_300datasets_scen12 = median_and_mean_relative_bias_eval(linear_50boots_300datasets_scen12)
+bias_linear_50boots_400datasets_scen12 = median_and_mean_relative_bias_eval(linear_50boots_400datasets_scen12)
+bias_linear_25boots_100datasets_scen12 = median_and_mean_relative_bias_eval(linear_25boots_100datasets_scen12)
+bias_linear_25boots_200datasets_scen12 = median_and_mean_relative_bias_eval(linear_25boots_200datasets_scen12)
+bias_linear_25boots_300datasets_scen12 = median_and_mean_relative_bias_eval(linear_25boots_300datasets_scen12)
+bias_linear_25boots_400datasets_scen12 = median_and_mean_relative_bias_eval(linear_25boots_400datasets_scen12)
+
+bias_enet_100boots_100datasets_scen12 = median_and_mean_relative_bias_eval(enet_100boots_100datasets_scen12)
+bias_enet_100boots_200datasets_scen12 = median_and_mean_relative_bias_eval(enet_100boots_200datasets_scen12)
+bias_enet_100boots_300datasets_scen12 = median_and_mean_relative_bias_eval(enet_100boots_300datasets_scen12)
+bias_enet_100boots_400datasets_scen12 = median_and_mean_relative_bias_eval(enet_100boots_400datasets_scen12)
+bias_enet_50boots_100datasets_scen12 = median_and_mean_relative_bias_eval(enet_50boots_100datasets_scen12)
+bias_enet_50boots_200datasets_scen12 = median_and_mean_relative_bias_eval(enet_50boots_200datasets_scen12)
+bias_enet_50boots_300datasets_scen12 = median_and_mean_relative_bias_eval(enet_50boots_300datasets_scen12)
+bias_enet_50boots_400datasets_scen12 = median_and_mean_relative_bias_eval(enet_50boots_400datasets_scen12)
+bias_enet_25boots_100datasets_scen12 = median_and_mean_relative_bias_eval(enet_25boots_100datasets_scen12)
+bias_enet_25boots_200datasets_scen12 = median_and_mean_relative_bias_eval(enet_25boots_200datasets_scen12)
+bias_enet_25boots_300datasets_scen12 = median_and_mean_relative_bias_eval(enet_25boots_300datasets_scen12)
+bias_enet_25boots_400datasets_scen12 = median_and_mean_relative_bias_eval(enet_25boots_400datasets_scen12)
+
+bias_100boots = rbind(
+  bias_linear_100boots_100datasets_scen11, 
+  bias_linear_100boots_200datasets_scen11,
+  bias_linear_100boots_300datasets_scen11,
+  bias_linear_100boots_400datasets_scen11,
+  bias_linear_100boots_100datasets_scen12, 
+  bias_linear_100boots_200datasets_scen12,
+  bias_linear_100boots_300datasets_scen12,
+  bias_linear_100boots_400datasets_scen12,
+  bias_enet_100boots_100datasets_scen11, 
+  bias_enet_100boots_200datasets_scen11,
+  bias_enet_100boots_300datasets_scen11,
+  bias_enet_100boots_400datasets_scen11,
+  bias_enet_100boots_100datasets_scen12, 
+  bias_enet_100boots_200datasets_scen12,
+  bias_enet_100boots_300datasets_scen12,
+  bias_enet_100boots_400datasets_scen12
+)
+
+bias_100boots$bootstraps = 100
+
+bias_50boots = rbind(
+  bias_linear_50boots_100datasets_scen11, 
+  bias_linear_50boots_200datasets_scen11,
+  bias_linear_50boots_300datasets_scen11,
+  bias_linear_50boots_400datasets_scen11,
+  bias_linear_50boots_100datasets_scen12, 
+  bias_linear_50boots_200datasets_scen12,
+  bias_linear_50boots_300datasets_scen12,
+  bias_linear_50boots_400datasets_scen12,
+  bias_enet_50boots_100datasets_scen11, 
+  bias_enet_50boots_200datasets_scen11,
+  bias_enet_50boots_300datasets_scen11,
+  bias_enet_50boots_400datasets_scen11,
+  bias_enet_50boots_100datasets_scen12, 
+  bias_enet_50boots_200datasets_scen12,
+  bias_enet_50boots_300datasets_scen12,
+  bias_enet_50boots_400datasets_scen12
+)
+
+bias_50boots$bootstraps = 50
+
+bias_25boots = rbind(
+  bias_linear_25boots_100datasets_scen11, 
+  bias_linear_25boots_200datasets_scen11,
+  bias_linear_25boots_300datasets_scen11,
+  bias_linear_25boots_400datasets_scen11,
+  bias_linear_25boots_100datasets_scen12, 
+  bias_linear_25boots_200datasets_scen12,
+  bias_linear_25boots_300datasets_scen12,
+  bias_linear_25boots_400datasets_scen12,
+  bias_enet_25boots_100datasets_scen11, 
+  bias_enet_25boots_200datasets_scen11,
+  bias_enet_25boots_300datasets_scen11,
+  bias_enet_25boots_400datasets_scen11,
+  bias_enet_25boots_100datasets_scen12, 
+  bias_enet_25boots_200datasets_scen12,
+  bias_enet_25boots_300datasets_scen12,
+  bias_enet_25boots_400datasets_scen12
+)
+
+bias_25boots$bootstraps = 25
+
+all_combos = rbind(
+  bias_100boots, bias_50boots, bias_25boots
+) %>% 
+  mutate(
+    datasets = factor(datasets),
+    bootstraps = factor(bootstraps)
+  )
+
+all_combos_scen11 = all_combos %>% 
+  filter(scenario == 11)
+```
+
+```{r}
+all_combos_scen11 %>% 
+  ggplot(aes(x = model_type, y = mean_relative_bias, color = datasets)) + 
+  geom_point() + 
+  facet_grid(. ~ bootstraps)
+
+all_combos_scen11 %>% 
+  ggplot(aes(x = model_type, y = median_relative_bias, color = datasets)) + 
+  geom_point() + 
+  facet_grid(. ~ bootstraps)
+
+all_combos_scen11 %>% 
+  ggplot(aes(x = model_type, y = mean_relative_bias, color = bootstraps)) + 
+  geom_point() + 
+  facet_grid(. ~ datasets)
+
+all_combos_scen11 %>% 
+  ggplot(aes(x = model_type, y = median_relative_bias, color = bootstraps)) + 
+  geom_point() + 
+  facet_grid(. ~ datasets)
+
+all_combos_scen11 %>% 
+  filter(scenario == 11) %>% 
+  ggplot(aes(x = model_type, y = mean_relative_bias)) + 
+  geom_point() + 
+  facet_grid(datasets ~ bootstraps)
+```
+

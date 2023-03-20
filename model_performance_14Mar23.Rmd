@@ -1,0 +1,814 @@
+---
+title: "Model Performance Results"
+author: 'Zachary Katz (UNI: zak2132)'
+date: "2023-03-14"
+output: pdf_document
+---
+
+# Data Import & Wrangling
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, cache = TRUE)
+library(tidyverse)
+```
+
+```{r, cache = TRUE, message = FALSE, warning = FALSE}
+# Import model results
+
+# Linear model
+setwd("~/Desktop/Scenarios 11 & 12/Linear")
+linear_results = list.files(path = "~/Desktop/Scenarios 11 & 12/Linear",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time / 60 # time in minutes
+  ) %>% 
+  distinct() %>% 
+  select(-dataset)
+
+# Elastic net model
+setwd("~/Desktop/Scenarios 11 & 12/Elastic Net")
+elastic_net_results = list.files(path = "~/Desktop/Scenarios 11 & 12/Elastic Net",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct() %>% 
+  select(-dataset)
+
+# MARS model
+setwd("~/Desktop/Scenarios 11 & 12/MARS")
+mars_results = list.files(path = "~/Desktop/Scenarios 11 & 12/MARS",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct() %>% 
+  select(-dataset)
+
+# GAM1 model
+setwd("~/Desktop/Scenarios 11 & 12/GAM1")
+gam1_results = list.files(path = "~/Desktop/Scenarios 11 & 12/GAM1",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time * 60 # convert to hours
+  ) %>% 
+  distinct() %>% 
+  select(-dataset)
+
+# Quantile G-Computation model
+setwd("~/Desktop/Scenarios 11 & 12/Quantile G-Computation")
+qgcomp_results = list.files(path = "~/Desktop/Scenarios 11 & 12/Quantile G-Computation",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct() %>% 
+  select(-dataset)
+
+# Causal Forest model
+setwd("~/Desktop/Scenarios 11 & 12/Causal Forest")
+causal_forest_results = list.files(path = "~/Desktop/Scenarios 11 & 12/Causal Forest",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct() %>% 
+  select(-dataset)
+
+# BKMR1 model
+setwd("~/Desktop/Scenarios 11 & 12/BKMR1")
+bkmr1_results = list.files(path = "~/Desktop/Scenarios 11 & 12/BKMR1",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time * 60 # convert to hours
+  ) %>%
+  distinct() %>% 
+  select(-dataset)
+
+# BART model
+setwd("~/Desktop/Scenarios 11 & 12/BART")
+bart_results = list.files(path = "~/Desktop/Scenarios 11 & 12/BART",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time * 60 # convert to hours
+  ) %>%
+  distinct() %>% 
+  select(-dataset)
+```
+
+```{r}
+# Load in true effects
+true_effects = readRDS("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/true_effects_new.RDS")
+true_effects_mixture = readRDS("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/true_effects_mixture_new.RDS")
+```
+
+```{r}
+# Can also try to adjust true effects for metals 6-10 to 0.0000000001
+true_effects_adj = true_effects[, 1:6] %>% 
+  mutate(
+    `6` = c(0.00000001, 0.00000001),
+    `7` = c(0.00000001, 0.00000001),
+    `8` = c(0.00000001, 0.00000001),
+    `9` = c(0.00000001, 0.00000001),
+    `10` = c(0.00000001, 0.00000001)
+  )
+```
+
+
+# Performance Measurement
+
+* Scenario 11: simple exposures, complex confounding, moderate collinearity
+* Scenario 12: complex exposures, complex confounding, moderate collinearity
+
+Note: besides confounders,exposure metals 1-5 are specified in the functional form for each scenario, while metals 6-10 are excluded. "Metal" 11 is the complete metal mixture.
+
+```{r, cache = TRUE}
+model_performance_dataset_level = function(df){
+  
+  rows = data.frame()
+  
+  df = df %>% 
+    select(scenario:model_type)
+  
+  model_type = df$model_type[1]
+  
+  for (row_num in 1:nrow(df)){
+    
+    row = df[row_num, ]
+    
+    if (as.numeric(row$metal) %in% c(1:10)){
+    
+      true_effect = true_effects[as.numeric(row$scenario), as.numeric(row$metal) + 1]
+    
+    }
+    
+    if (as.numeric(row$metal) %in% c(11)){
+    
+      true_effect = true_effects_mixture[as.numeric(row$scenario), ][, 2]
+    
+    }
+    
+    row_truth = row %>%
+      mutate(
+        true_effect = as.numeric(true_effect)
+      ) %>%
+      mutate(
+        point_bias = true_effect - point_estimate,
+        relative_bias = point_bias / true_effect,
+        standard_error = (true_effect - point_estimate)^2,
+        includes = if_else(CI_lower <= true_effect & CI_upper >= true_effect,
+                           1,
+                           0),
+        CI_length = CI_upper - CI_lower,
+        sig_effect = case_when(
+          CI_lower > 0 & CI_upper > 0 ~ 1,
+          CI_lower < 0 & CI_upper < 0 ~ 1,
+          CI_lower < 0 & CI_upper > 0 ~ 0
+        )
+      )
+    
+    rows = rbind(rows, row_truth)
+    
+  }
+  
+  return(rows)
+  
+}
+
+model_performance_scenario_level = function(df){
+  
+  rows = data.frame()
+  
+  df = df %>% 
+    select(scenario:model_type)
+  
+  model_type = df$model_type[1]
+  
+  for (row_num in 1:nrow(df)){
+    
+    row = df[row_num, ]
+    
+    if (as.numeric(row$metal) %in% c(1:10)){
+    
+      true_effect = true_effects[as.numeric(row$scenario), as.numeric(row$metal) + 1]
+    
+    }
+    
+    if (as.numeric(row$metal) %in% c(11)){
+    
+      true_effect = true_effects_mixture[as.numeric(row$scenario), ][, 2]
+    
+    }
+    
+    row_truth = row %>%
+      mutate(
+        true_effect = as.numeric(true_effect)
+      ) %>%
+      mutate(
+        point_bias = abs(true_effect - point_estimate),
+        relative_bias = point_bias / true_effect,
+        standard_error = (true_effect - point_estimate)^2,
+        includes = if_else(CI_lower <= true_effect & CI_upper >= true_effect,
+                           1,
+                           0),
+        CI_length = CI_upper - CI_lower,
+        sig_effect = case_when(
+          CI_lower > 0 & CI_upper > 0 ~ 1,
+          CI_lower < 0 & CI_upper < 0 ~ 1,
+          CI_lower < 0 & CI_upper > 0 ~ 0
+        )
+      )
+    
+    rows = rbind(rows, row_truth)
+    
+  }
+  
+  performance_summary = rows %>% 
+    group_by(scenario, metal) %>%
+    summarize(
+        RMSE = sqrt(mean(standard_error)),
+        coverage = mean(includes),
+        mean_sig_effect = mean(sig_effect),
+        avg_time = mean(time)
+      ) %>%
+    mutate(
+      power = dplyr::case_when(
+        metal %in% c(1, 2, 3, 4, 5, 11) ~ mean_sig_effect,
+        !(metal %in% c(1, 2, 3, 4, 5, 11)) ~ 1 - mean_sig_effect)
+    ) %>% 
+    select(scenario, metal, RMSE, coverage, power, avg_time)
+  
+  performance_summary$model_type = model_type
+  
+  return(performance_summary)
+  
+}
+```
+
+```{r, cache = TRUE, message = FALSE, warning = FALSE}
+linear_model_performance_dataset_level = model_performance_dataset_level(linear_results)
+linear_model_performance_scenario_level = model_performance_scenario_level(linear_results)
+
+elastic_net_model_performance_dataset_level = model_performance_dataset_level(elastic_net_results)
+elastic_net_model_performance_scenario_level = model_performance_scenario_level(elastic_net_results)
+
+mars_model_performance_dataset_level = model_performance_dataset_level(mars_results)
+mars_model_performance_scenario_level = model_performance_scenario_level(mars_results)
+
+gam1_model_performance_dataset_level = model_performance_dataset_level(gam1_results)
+gam1_model_performance_scenario_level = model_performance_scenario_level(gam1_results)
+
+qgcomp_model_performance_dataset_level = model_performance_dataset_level(qgcomp_results)
+qgcomp_model_performance_scenario_level = model_performance_scenario_level(qgcomp_results)
+
+causal_forest_model_performance_dataset_level = model_performance_dataset_level(causal_forest_results)
+causal_forest_model_performance_scenario_level = model_performance_scenario_level(causal_forest_results)
+
+bkmr1_model_performance_dataset_level = model_performance_dataset_level(bkmr1_results)
+bkmr1_model_performance_scenario_level = model_performance_scenario_level(bkmr1_results)
+
+bart_model_performance_dataset_level = model_performance_dataset_level(bart_results)
+bart_model_performance_scenario_level = model_performance_scenario_level(bart_results)
+
+
+dataset_level_performance = rbind(linear_model_performance_dataset_level,
+                                  elastic_net_model_performance_dataset_level,
+                                  mars_model_performance_dataset_level,
+                                  gam1_model_performance_dataset_level,
+                                  qgcomp_model_performance_dataset_level,
+                                  causal_forest_model_performance_dataset_level,
+                                  bkmr1_model_performance_dataset_level,
+                                  bart_model_performance_dataset_level)
+
+scenario_level_performance = rbind(linear_model_performance_scenario_level,
+                                   elastic_net_model_performance_scenario_level,
+                                   mars_model_performance_scenario_level,
+                                   gam1_model_performance_scenario_level,
+                                   qgcomp_model_performance_scenario_level,
+                                   causal_forest_model_performance_scenario_level,
+                                   bkmr1_model_performance_scenario_level,
+                                   bart_model_performance_scenario_level)
+```
+
+## Relative Bias
+
+### Data Visualizations
+
+```{r}
+# Relative bias distributions
+
+# Individual metals
+dataset_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5)) %>% 
+  ggplot(aes(x = model_type, y = relative_bias)) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "Distribution of Relative Bias by Scenario & Model",
+       subtitle = "For Exposures in Functional Form (Metals 1-5)")
+
+# Mixture
+dataset_level_performance %>% 
+  filter(metal == 11) %>% 
+  ggplot(aes(x = model_type, y = relative_bias)) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "Distribution of Relative Bias by Scenario & Model",
+       subtitle = "For Full Metal Mixture")
+```
+
+```{r}
+# Relative bias medians, grouped by metal
+
+# Individual metals
+dataset_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5)) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    median_relative_bias = median(relative_bias)
+  ) %>% 
+  ggplot(aes(x = model_type, y = median_relative_bias)) + 
+  geom_point() + 
+  facet_grid(metal ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Median Relative Bias by Scenario & Model, Grouped by Metal",
+       subtitle = "For Exposures in Functional Form (Metals 1-5)")
+
+# Mixture
+dataset_level_performance %>% 
+  filter(metal == 11) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    median_relative_bias = median(relative_bias)
+  ) %>% 
+  ggplot(aes(x = model_type, y = median_relative_bias)) + 
+  geom_point() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Median Relative Bias by Scenario & Model",
+       subtitle = "For Full Metal Mixture")
+```
+
+```{r}
+# Table format: minima (scenario 11)
+dataset_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5,11), scenario == 11) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    abs_median_relative_bias = abs(median(relative_bias))
+  ) %>% 
+  filter(scenario == 11) %>% 
+  group_by(metal) %>% 
+  summarize(
+    min_abs_median_relative_bias = min(abs(abs_median_relative_bias))
+  ) %>% 
+  inner_join(
+    dataset_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5,11), scenario == 11) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    abs_median_relative_bias = abs(median(relative_bias))
+  ),
+  by = join_by(min_abs_median_relative_bias == abs_median_relative_bias, metal == metal),
+  multiple = "all"
+  )
+
+# Table format: maxima (scenario 11)
+dataset_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5,11), scenario == 11) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    abs_median_relative_bias = abs(median(relative_bias))
+  ) %>% 
+  filter(scenario == 11) %>% 
+  group_by(metal) %>% 
+  summarize(
+    max_abs_median_relative_bias = max(abs(abs_median_relative_bias))
+  ) %>% 
+  inner_join(
+    dataset_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5), scenario == 11) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    abs_median_relative_bias = abs(median(relative_bias))
+  ),
+  by = join_by(max_abs_median_relative_bias == abs_median_relative_bias, metal == metal),
+  multiple = "all"
+  )
+
+# Table format: minima (scenario 12)
+dataset_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5,11), scenario == 12) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    abs_median_relative_bias = abs(median(relative_bias))
+  ) %>% 
+  filter(scenario == 12) %>% 
+  group_by(metal) %>% 
+  summarize(
+    min_abs_median_relative_bias = min(abs(abs_median_relative_bias))
+  ) %>% 
+  inner_join(
+    dataset_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5,11), scenario == 12) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    abs_median_relative_bias = abs(median(relative_bias))
+  ),
+  by = join_by(min_abs_median_relative_bias == abs_median_relative_bias, metal == metal),
+  multiple = "all"
+  )
+
+# Table format: maxima (scenario 12)
+dataset_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5,11), scenario == 12) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    abs_median_relative_bias = abs(median(relative_bias))
+  ) %>% 
+  filter(scenario == 12) %>% 
+  group_by(metal) %>% 
+  summarize(
+    max_abs_median_relative_bias = max(abs(abs_median_relative_bias))
+  ) %>% 
+  inner_join(
+    dataset_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5), scenario == 12) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    abs_median_relative_bias = abs(median(relative_bias))
+  ),
+  by = join_by(max_abs_median_relative_bias == abs_median_relative_bias, metal == metal),
+  multiple = "all"
+  )
+```
+
+```{r}
+# Relative bias medians, not grouped by metal
+
+# Individual metals
+dataset_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5)) %>% 
+  group_by(scenario, model_type) %>% 
+  summarize(
+    median_relative_bias = median(relative_bias)
+  ) %>% 
+  ggplot(aes(x = scenario, y = median_relative_bias, color = model_type)) + 
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Median Relative Bias by Scenario & Model, Not Grouped By Metal",
+       subtitle = "For Exposures in Functional Form (Metals 1-5)")
+
+# Mixture
+# Is same as earlier, because only one metal
+# dataset_level_performance %>% 
+#   filter(metal == 11) %>% 
+#   group_by(scenario, model_type) %>% 
+#   summarize(
+#     median_relative_bias = median(relative_bias)
+#   ) %>% 
+#   ggplot(aes(x = model_type, y = median_relative_bias)) + 
+#   geom_point() + 
+#   facet_grid(. ~ scenario) + 
+#   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+```
+
+```{r}
+# Check that median relative bias is generally worse for scenario 12 than for scenario 11
+dataset_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5)) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    median_relative_bias = median(relative_bias)
+  ) %>% 
+  ggplot(aes(x = model_type, y = median_relative_bias, color = scenario)) + 
+geom_point() + 
+  facet_grid(. ~ metal)  +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Median Relative Bias by Model and Metal, Colored by Scenario",
+       subtitle = "For Exposures in Functional Form (Metals 1-5)")
+```
+
+### Observations
+
+* Generally, relative bias is in a tighter range for MARS, GAM, and causal forest compared to linear, elastic net, or quantile g-computation (qgcomp) -- and across model types, is in a tighter range for scenario 12 (complex exposures) than for scenario 11 (simple exposures)
+* For scenario 11, GAM model almost universally has lowest minimum absolute value of median relative bias for each metal; qgcomp and MARS model generally have highest, tending to perform worse than even linear/elastic net
+* For scenario 12, linear, causal forest, and qgcomp models have lowest minimum absolute value of median relative bias for each metal; MARS model is almost universally worst, with highest max absolute value of median relative bias for each metal (except for metal 1, where qgcomp is worst)
+* When not grouping by metal, GAM does best for scenario 11 and scenario 12, while MARS does worst for scenario 11 and scenario 12
+* As expected, median relative bias is generally (though not completely consistently) better for each unique metal/model type in scenario 11 compared to scenario 12
+* Causal Forest performs perhaps most similarly in scenario 11 vs. scenario 12; still relatively consistent despite complex confounding structure
+
+## RMSE
+
+### Data Visualizations
+
+```{r}
+# RMSE
+
+# Individual metals
+scenario_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5)) %>% 
+  ggplot(aes(x = metal, y = RMSE, color = model_type)) + 
+  geom_point() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "RMSE by Scenario & Model",
+       subtitle = "For Exposures in Functional Form (Metals 1 & 5)")
+
+# Individual metals, alternative viz
+scenario_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5)) %>% 
+  ggplot(aes(x = scenario, y = RMSE, color = model_type)) + 
+  geom_point() + 
+  facet_grid(. ~ metal) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "RMSE by Scenario & Model",
+       subtitle = "For Exposures in Functional Form (Metals 1 & 5)")
+
+# Mixture
+scenario_level_performance %>% 
+  filter(metal == 11) %>% 
+  ggplot(aes(x = scenario, y = RMSE, color = model_type)) + 
+  geom_point() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "RMSE by Scenario & Model",
+       subtitle = "For Full Metal Mixture")
+```
+
+### Observations
+
+* For both scenarios, RMSE generally minimized by causal forest (and sometimes GAM) but maximized by qgcomp (and sometimes linear model)
+* For full metal mixtures, RMSE is minimized by GAM and MARS for scenario 11, and causal forest for scenario 12; for scenario 11, maximized by linear, but for scenario 12, maximized by qgcomp
+
+## Other Measures
+
+```{r}
+# Variance
+dataset_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5)) %>% 
+  ggplot(aes(x = model_type, y = variance)) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "Distribution of Variance by Scenario & Model",
+       subtitle = "For Exposures in Functional Form (Metals 1 & 5)")
+
+dataset_level_performance %>% 
+  filter(metal == 11) %>% 
+  ggplot(aes(x = model_type, y = variance)) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "Distribution of Variance by Scenario & Model",
+       subtitle = "For Full Metal Mixture")
+```
+
+```{r}
+# Coverage
+
+# Individual metals
+scenario_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5)) %>% 
+  ggplot(aes(x = metal, y = coverage, color = model_type)) + 
+  geom_point() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "Coverage by Scenario & Model",
+       subtitle = "For Exposures in Functional Form (Metals 1 & 5)")
+
+# Mixture
+scenario_level_performance %>% 
+  filter(metal == 11) %>% 
+  ggplot(aes(x = metal, y = coverage, color = model_type)) + 
+  geom_point() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "Coverage by Scenario & Model",
+       subtitle = "For Full Metal Mixture")
+```
+
+# Appendix
+
+
+```{r}
+# Grid of metrics (rows) x scenarios (columns)
+# all_performance %>% 
+#   filter(metal %in% c(1, 5, 11)) %>% 
+#   pivot_longer(cols = mean_point_estimate:avg_time,
+#                names_to = "metric") %>% 
+#   filter(metric %in% c("relative_bias", "coverage", "power", "RMSE")) %>% 
+#   ggplot(aes(x = metal, y = value, color = model_type)) + 
+#   geom_point() + 
+#   facet_grid(scenario ~ metric)
+```
+
+```{r}
+# With adjusted true effects for metals 6-10
+model_performance_dataset_level_adj = function(df){
+  
+  rows = data.frame()
+  
+  df = df %>% 
+    select(scenario:model_type)
+  
+  model_type = df$model_type[1]
+  
+  for (row_num in 1:nrow(df)){
+    
+    row = df[row_num, ]
+    
+    if (as.numeric(row$metal) %in% c(1:10)){
+    
+      true_effect = true_effects_adj[as.numeric(row$scenario), as.numeric(row$metal) + 1]
+    
+    }
+    
+    if (as.numeric(row$metal) %in% c(11)){
+    
+      true_effect = true_effects_mixture[as.numeric(row$scenario), ][, 2]
+    
+    }
+    
+    row_truth = row %>%
+      mutate(
+        true_effect = as.numeric(true_effect)
+      ) %>%
+      mutate(
+        point_bias = true_effect - point_estimate,
+        relative_bias = point_bias / true_effect,
+        standard_error = (true_effect - point_estimate)^2,
+        includes = if_else(CI_lower <= true_effect & CI_upper >= true_effect,
+                           1,
+                           0),
+        CI_length = CI_upper - CI_lower,
+        sig_effect = case_when(
+          CI_lower > 0 & CI_upper > 0 ~ 1,
+          CI_lower < 0 & CI_upper < 0 ~ 1,
+          CI_lower < 0 & CI_upper > 0 ~ 0
+        )
+      )
+    
+    rows = rbind(rows, row_truth)
+    
+  }
+  
+  return(rows)
+  
+}
+
+model_performance_scenario_level_adj = function(df){
+  
+  rows = data.frame()
+  
+  df = df %>% 
+    select(scenario:model_type)
+  
+  model_type = df$model_type[1]
+  
+  for (row_num in 1:nrow(df)){
+    
+    row = df[row_num, ]
+    
+    if (as.numeric(row$metal) %in% c(1:10)){
+    
+      true_effect = true_effects_adj[as.numeric(row$scenario), as.numeric(row$metal) + 1]
+    
+    }
+    
+    if (as.numeric(row$metal) %in% c(11)){
+    
+      true_effect = true_effects_mixture[as.numeric(row$scenario), ][, 2]
+    
+    }
+    
+    row_truth = row %>%
+      mutate(
+        true_effect = as.numeric(true_effect)
+      ) %>%
+      mutate(
+        point_bias = abs(true_effect - point_estimate),
+        relative_bias = point_bias / true_effect,
+        standard_error = (true_effect - point_estimate)^2,
+        includes = if_else(CI_lower <= true_effect & CI_upper >= true_effect,
+                           1,
+                           0),
+        CI_length = CI_upper - CI_lower,
+        sig_effect = case_when(
+          CI_lower > 0 & CI_upper > 0 ~ 1,
+          CI_lower < 0 & CI_upper < 0 ~ 1,
+          CI_lower < 0 & CI_upper > 0 ~ 0
+        )
+      )
+    
+    rows = rbind(rows, row_truth)
+    
+  }
+  
+  performance_summary = rows %>% 
+    group_by(scenario, metal) %>%
+    summarize(
+        RMSE = sqrt(mean(standard_error)),
+        coverage = mean(includes),
+        mean_sig_effect = mean(sig_effect),
+        avg_time = mean(time)
+      ) %>%
+    mutate(
+      power = dplyr::case_when(
+        metal %in% c(1, 2, 3, 4, 5, 11) ~ mean_sig_effect,
+        !(metal %in% c(1, 2, 3, 4, 5, 11)) ~ 1 - mean_sig_effect)
+    ) %>% 
+    select(scenario, metal, RMSE, coverage, power, avg_time)
+  
+  performance_summary$model_type = model_type
+  
+  return(performance_summary)
+  
+}
+```
+
+```{r, cache = TRUE, message = FALSE, warning = FALSE}
+linear_model_performance_dataset_level_adj = model_performance_dataset_level_adj(linear_results)
+linear_model_performance_scenario_level_adj = model_performance_scenario_level_adj(linear_results)
+
+elastic_net_model_performance_dataset_level_adj = model_performance_dataset_level_adj(elastic_net_results)
+elastic_net_model_performance_scenario_level_adj = model_performance_scenario_level_adj(elastic_net_results)
+
+mars_model_performance_dataset_level_adj = model_performance_dataset_level_adj(mars_results)
+mars_model_performance_scenario_level_adj = model_performance_scenario_level_adj(mars_results)
+
+gam1_model_performance_dataset_level_adj = model_performance_dataset_level_adj(gam1_results)
+gam1_model_performance_scenario_level_adj = model_performance_scenario_level_adj(gam1_results)
+
+qgcomp_model_performance_dataset_level_adj = model_performance_dataset_level_adj(qgcomp_results)
+qgcomp_model_performance_scenario_level_adj = model_performance_scenario_level_adj(qgcomp_results)
+
+dataset_level_performance_adj = rbind(linear_model_performance_dataset_level_adj,
+                                  elastic_net_model_performance_dataset_level_adj,
+                                  mars_model_performance_dataset_level_adj,
+                                  gam1_model_performance_dataset_level_adj,
+                                  qgcomp_model_performance_dataset_level_adj)
+
+scenario_level_performance_adj = rbind(linear_model_performance_scenario_level_adj,
+                                   elastic_net_model_performance_scenario_level_adj,
+                                   mars_model_performance_scenario_level_adj,
+                                   gam1_model_performance_scenario_level_adj,
+                                   qgcomp_model_performance_scenario_level_adj)
+```
+
+```{r}
+# Relative bias distributions
+
+# Individual metals
+dataset_level_performance_adj %>% 
+  filter(metal %in% c(1,2,3,4,5,6,7,8,9,10)) %>% 
+  ggplot(aes(x = model_type, y = relative_bias)) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) + 
+  labs(title = "Distribution of Relative Bias by Scenario & Model",
+       subtitle = "For All Metals 1-10")
+
+# Individual metals
+dataset_level_performance_adj %>% 
+  filter(metal %in% c(1,2,3,4,5,6,7,8,9,10)) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    median_relative_bias = median(relative_bias)
+  ) %>% 
+  ggplot(aes(x = model_type, y = median_relative_bias)) + 
+  geom_point() + 
+  facet_grid(metal ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Median Relative Bias by Scenario & Model, Grouped by Metal",
+       subtitle = "For All Metals 1-10")
+```
+
