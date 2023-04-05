@@ -1,0 +1,1752 @@
+---
+title: "Model Performance Results for Practicum: Scenarios 11 & 12"
+author: 'Zachary Katz (UNI: zak2132)'
+date: "2023-03-25"
+output: pdf_document
+---
+
+# Data Import & Wrangling
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, cache = TRUE)
+library(tidyverse)
+```
+
+```{r}
+# Load in true effects
+true_effects = readRDS("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/true_effects_new.RDS")
+true_effects_mixture = readRDS("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/true_effects_mixture_new.RDS")
+```
+
+```{r, cache = TRUE, message = FALSE, warning = FALSE}
+# Import model results
+
+# Linear model
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/Linear")
+linear_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/Linear",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time / 60 # convert time in seconds to minutes
+  ) %>% 
+  distinct()
+
+# Elastic net model
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/Elastic Net")
+elastic_net_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/Elastic Net",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time / 60 # convert time in seconds to minutes
+  ) %>%
+  distinct()
+
+# MARS model
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/MARS")
+mars_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/MARS",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct()
+
+# Causal Forest model
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/Causal Forest")
+causal_forest_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/Causal Forest",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct()
+
+# Quantile G-Computation model
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/Quantile G-Computation")
+qgcomp_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/Quantile G-Computation",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct()
+
+# GAM1 model
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/GAM1")
+gam1_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/GAM1",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal)
+  ) %>% # time already in minutes
+  distinct()
+
+# Random Forest model
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/Random Forest")
+random_forest_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/Random Forest",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time * 60 # convert minutes to hours
+  ) %>% 
+  distinct()
+
+# SuperLearner model
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/SuperLearner")
+superlearner_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/SuperLearner",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time * 60 # convert minutes to hours
+  ) %>%
+  distinct()
+
+# BKMR1 model
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/BKMR1")
+bkmr1_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/BKMR1",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time * 60 # convert minutes to hours
+  ) %>%
+  distinct()
+
+# BART model
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/BART")
+bart_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/BART",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time * 60 # convert minutes to hours
+  ) %>%
+  distinct()
+
+# GAM2 model
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/GAM2")
+gam2_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/GAM2",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time * 60 # convert minutes to hours
+  ) %>%
+  distinct()
+
+# BKMR2 model
+setwd("~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/BKMR2")
+bkmr2_results = list.files(path = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/Latest Practicum Models & Results/Results/BKMR2",
+                            pattern = "*.csv") %>% 
+  map_df(~read_csv(.)) %>% 
+  as.data.frame() %>% 
+  mutate(
+    scenario = as.factor(scenario),
+    metal = as.factor(metal),
+    time = time * 60 # convert minutes to hours
+  ) %>%
+  distinct()
+```
+
+```{r}
+# Random sampling function to obtain 200 datasets where needed (or just choose first 200)
+draw_function = function(scenario_num, results, N) {
+  
+  set.seed(2132)
+  
+  # Select 200 random dataset indices
+  scenario_results = results %>% filter(scenario == scenario_num)
+  dataset_indices = unique(scenario_results$dataset)
+  
+  random_indices = sample(dataset_indices, N)
+  
+  # Filter for random sample in results
+  sampled_datasets = scenario_results %>% filter(dataset %in% random_indices)
+
+  return(sampled_datasets)
+  
+}
+```
+
+```{r}
+# Randomly sample 200 datasets per model/scenario combination
+linear_results_filtered = rbind(draw_function(scenario_num = 11, results = linear_results, N = 200),
+                       draw_function(scenario_num = 12, results = linear_results, N = 200))
+
+elastic_net_results_filtered = rbind(draw_function(scenario_num = 11, results = elastic_net_results, N = 200),
+                       draw_function(scenario_num = 12, results = elastic_net_results, N = 200))
+
+MARS_results_filtered = rbind(draw_function(scenario_num = 11, results = mars_results, N = 200),
+                       draw_function(scenario_num = 12, results = mars_results, N = 200))
+
+random_forest_results_filtered = rbind(draw_function(scenario_num = 11, results = random_forest_results, N = 200),
+                       draw_function(scenario_num = 12, results = random_forest_results, N = 200))
+
+causal_forest_results_filtered = rbind(draw_function(scenario_num = 11, results = causal_forest_results, N = 200),
+                       draw_function(scenario_num = 12, results = causal_forest_results, N = 200))
+
+qgcomp_results_filtered = rbind(draw_function(scenario_num = 11, results = qgcomp_results, N = 200),
+                       draw_function(scenario_num = 12, results = qgcomp_results, N = 200))
+
+GAM1_results_filtered = rbind(draw_function(scenario_num = 11, results = gam1_results, N = 200),
+                       draw_function(scenario_num = 12, results = gam1_results, N = 200))
+
+GAM2_results_filtered = rbind(draw_function(scenario_num = 11, results = gam2_results, N = 200),
+                       draw_function(scenario_num = 12, results = gam2_results, N = 200))
+
+superlearner_results_filtered = rbind(draw_function(scenario_num = 11, results = superlearner_results, N = 200),
+                       draw_function(scenario_num = 12, results = superlearner_results, N = 200))
+
+BART_results_filtered = rbind(draw_function(scenario_num = 11, results = bart_results, N = 200),
+                       draw_function(scenario_num = 12, results = bart_results, N = 200))
+
+BKMR1_results_filtered = rbind(draw_function(scenario_num = 11, results = bkmr1_results, N = 200),
+                       draw_function(scenario_num = 12, results = bkmr1_results, N = 200))
+
+BKMR2_results_filtered = rbind(draw_function(scenario_num = 11, results = bkmr2_results, N = 200),
+                       draw_function(scenario_num = 12, results = bkmr2_results, N = 200))
+```
+
+# Data Processing
+
+* Scenario 11: simple exposures, complex confounding, moderate collinearity
+* Scenario 12: complex exposures, complex confounding, moderate collinearity
+
+Note: besides confounders,exposure metals 1-5 are specified in the functional form for each scenario, while metals 6-10 are excluded. "Metal" 11 is the complete metal mixture.
+
+```{r, cache = TRUE}
+model_performance_rows_function = function(df){
+  
+  rows = data.frame()
+  
+  df = df %>% 
+    dplyr::select(scenario:model_type)
+  
+  model_type = df$model_type[1]
+  
+  for (row_num in 1:nrow(df)){
+    
+    row = df[row_num, ]
+    
+    if (as.numeric(row$metal) %in% c(1:10)){
+    
+      true_effect = true_effects[as.numeric(row$scenario), as.numeric(row$metal) + 1]
+    
+    }
+    
+    if (as.numeric(row$metal) %in% c(11)){
+    
+      true_effect = true_effects_mixture[as.numeric(row$scenario), ][, 2]
+    
+    }
+    
+    row_truth = row %>%
+      mutate(
+        true_effect = as.numeric(true_effect)
+      ) %>%
+      mutate(
+        point_bias = point_estimate - true_effect,
+        relative_bias = point_bias / true_effect,
+        standard_error = (point_estimate - true_effect)^2,
+        includes = if_else(CI_lower <= true_effect & CI_upper >= true_effect,
+                           1,
+                           0),
+        CI_length = CI_upper - CI_lower,
+        sig_effect = case_when(
+          CI_lower > 0 & CI_upper > 0 ~ 1,
+          CI_lower < 0 & CI_upper < 0 ~ 1,
+          CI_lower < 0 & CI_upper > 0 ~ 0
+        )
+      )
+    
+    rows = rbind(rows, row_truth)
+    
+  }
+  
+  return(rows)
+  
+}
+
+model_performance_dataset_level = function(df){
+  
+  dataset_performance = model_performance_rows_function(df)
+  
+  return(dataset_performance)
+  
+}
+
+model_performance_scenario_level = function(df){
+  
+  rows = model_performance_rows_function(df)
+  
+  performance_summary = rows %>% 
+    group_by(scenario, metal) %>%
+    summarize(
+        mean_relative_bias = mean(relative_bias),
+        median_relative_bias = median(relative_bias),
+        RMSE = sqrt(mean(standard_error)),
+        coverage = mean(includes),
+        mean_sig_effect = mean(sig_effect),
+        avg_time = mean(time)
+      ) %>%
+    mutate(
+      power = dplyr::case_when(
+        metal %in% c(1, 2, 3, 4, 5, 11) ~ mean_sig_effect,
+        !(metal %in% c(1, 2, 3, 4, 5, 11)) ~ 1 - mean_sig_effect)
+    ) %>% 
+    dplyr::select(scenario, metal, mean_relative_bias, median_relative_bias, RMSE, coverage, power, avg_time)
+  
+  performance_summary$model_type = rows$model_type[[1]]
+  
+  return(performance_summary)
+  
+}
+```
+
+```{r, cache = TRUE, message = FALSE, warning = FALSE}
+linear_model_performance_dataset_level = model_performance_dataset_level(linear_results_filtered)
+linear_model_performance_scenario_level = model_performance_scenario_level(linear_results_filtered)
+
+elastic_net_model_performance_dataset_level = model_performance_dataset_level(elastic_net_results_filtered)
+elastic_net_model_performance_scenario_level = model_performance_scenario_level(elastic_net_results_filtered)
+
+mars_model_performance_dataset_level = model_performance_dataset_level(MARS_results_filtered)
+mars_model_performance_scenario_level = model_performance_scenario_level(MARS_results_filtered)
+
+causal_forest_model_performance_dataset_level = model_performance_dataset_level(causal_forest_results_filtered)
+causal_forest_model_performance_scenario_level = model_performance_scenario_level(causal_forest_results_filtered)
+
+qgcomp_model_performance_dataset_level = model_performance_dataset_level(qgcomp_results_filtered)
+qgcomp_model_performance_scenario_level = model_performance_scenario_level(qgcomp_results_filtered)
+
+gam1_model_performance_dataset_level = model_performance_dataset_level(GAM1_results_filtered)
+gam1_model_performance_scenario_level = model_performance_scenario_level(GAM1_results_filtered)
+
+random_forest_model_performance_dataset_level = model_performance_dataset_level(random_forest_results_filtered)
+random_forest_model_performance_scenario_level = model_performance_scenario_level(random_forest_results_filtered)
+
+superlearner_model_performance_dataset_level = model_performance_dataset_level(superlearner_results_filtered)
+superlearner_model_performance_scenario_level = model_performance_scenario_level(superlearner_results_filtered)
+
+bkmr1_model_performance_dataset_level = model_performance_dataset_level(BKMR1_results_filtered)
+bkmr1_model_performance_scenario_level = model_performance_scenario_level(BKMR1_results_filtered)
+
+bart_model_performance_dataset_level = model_performance_dataset_level(BART_results_filtered)
+bart_model_performance_scenario_level = model_performance_scenario_level(BART_results_filtered)
+
+gam2_model_performance_dataset_level = model_performance_dataset_level(GAM2_results_filtered)
+gam2_model_performance_scenario_level = model_performance_scenario_level(GAM2_results_filtered)
+
+bkmr2_model_performance_dataset_level = model_performance_dataset_level(BKMR2_results_filtered)
+bkmr2_model_performance_scenario_level = model_performance_scenario_level(BKMR2_results_filtered)
+
+dataset_level_performance = rbind(linear_model_performance_dataset_level,
+                                  elastic_net_model_performance_dataset_level,
+                                  mars_model_performance_dataset_level,
+                                  causal_forest_model_performance_dataset_level,
+                                  qgcomp_model_performance_dataset_level,
+                                  gam1_model_performance_dataset_level,
+                                  random_forest_model_performance_dataset_level,
+                                  superlearner_model_performance_dataset_level,
+                                  bkmr1_model_performance_dataset_level,
+                                  bart_model_performance_dataset_level,
+                                  gam2_model_performance_dataset_level,
+                                  bkmr2_model_performance_dataset_level)
+
+scenario_level_performance = rbind(linear_model_performance_scenario_level,
+                                   elastic_net_model_performance_scenario_level,
+                                   mars_model_performance_scenario_level,
+                                   causal_forest_model_performance_scenario_level,
+                                   qgcomp_model_performance_scenario_level,
+                                   gam1_model_performance_scenario_level,
+                                   random_forest_model_performance_scenario_level,
+                                   superlearner_model_performance_scenario_level,
+                                   bkmr1_model_performance_scenario_level,
+                                   bart_model_performance_scenario_level,
+                                   gam2_model_performance_scenario_level,
+                                   bkmr2_model_performance_scenario_level)
+```
+
+```{r}
+# Save CSVs
+write_csv(dataset_level_performance, "dataset_level_performance.csv")
+write_csv(scenario_level_performance, "scenario_level_performance.csv")
+```
+
+# Results
+
+## Relative Bias
+
+### Visualizations at Dataset Level
+
+```{r}
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = model_type, y = relative_bias, color = metal)
+  ) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = model_type, y = relative_bias)
+  ) + 
+  geom_boxplot() + 
+  facet_grid(scenario ~ metal) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = model_type, y = relative_bias)
+  ) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = scenario, y = relative_bias, color = model_type)
+  ) + 
+  geom_boxplot()
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = scenario, y = relative_bias, color = model_type)
+  ) + 
+  geom_boxplot() + 
+  facet_grid(metal ~ .)
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = metal, y = relative_bias, color = model_type)
+  ) + 
+  geom_boxplot() + 
+  facet_grid(scenario ~ .)
+```
+
+### Visualizations at Scenario Level
+
+```{r}
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = model_type, y = median_relative_bias, color = metal)
+  ) + 
+  geom_point() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = model_type, y = median_relative_bias)
+  ) + 
+  geom_point() + 
+  facet_grid(metal ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = metal, y = median_relative_bias, color = model_type)
+  ) + 
+  geom_point() + 
+  facet_grid(. ~ scenario)
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = scenario, y = median_relative_bias, color = model_type)
+  ) + 
+  geom_boxplot()
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = scenario, y = median_relative_bias, color = model_type)
+  ) + 
+  geom_point() + 
+  facet_grid(metal ~ .)
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = metal, y = median_relative_bias, color = model_type)
+  ) + 
+  geom_point() + 
+  facet_grid(scenario ~ .)
+```
+
+### Tables
+
+```{r}
+# Medians
+# Table format: minima (scenario 11)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 11) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    min_relative_bias = min(abs(median_relative_bias))
+  ) %>% 
+  inner_join(
+    scenario_level_performance %>% mutate(abs_median_relative_bias = abs(median_relative_bias)),
+    by = join_by(min_relative_bias == abs_median_relative_bias, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, min_relative_bias, model_type)
+    
+# Table format: maxima (scenario 11)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 11) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    max_relative_bias = max(abs(median_relative_bias))
+  ) %>% 
+  inner_join(
+    scenario_level_performance %>% mutate(abs_median_relative_bias = abs(median_relative_bias)),
+    by = join_by(max_relative_bias == abs_median_relative_bias, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, max_relative_bias, model_type)
+
+# Table format: minima (scenario 12)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 12) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    min_relative_bias = min(abs(median_relative_bias))
+  ) %>% 
+  inner_join(
+    scenario_level_performance %>% mutate(abs_median_relative_bias = abs(median_relative_bias)),
+    by = join_by(min_relative_bias == abs_median_relative_bias, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, min_relative_bias, model_type)
+    
+# Table format: maxima (scenario 12)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 12) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    max_relative_bias = max(abs(median_relative_bias))
+  ) %>% 
+  inner_join(
+    scenario_level_performance %>% mutate(abs_median_relative_bias = abs(median_relative_bias)),
+    by = join_by(max_relative_bias == abs_median_relative_bias, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, max_relative_bias, model_type)
+```
+
+```{r}
+# Means
+# Table format: minima (scenario 11)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 11) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    min_relative_bias = min(abs(mean_relative_bias))
+  ) %>% 
+  inner_join(
+    scenario_level_performance %>% mutate(abs_mean_relative_bias = abs(mean_relative_bias)),
+    by = join_by(min_relative_bias == abs_mean_relative_bias, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, min_relative_bias, model_type)
+    
+# Table format: maxima (scenario 11)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 11) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    max_relative_bias = max(abs(mean_relative_bias))
+  ) %>% 
+  inner_join(
+    scenario_level_performance %>% mutate(abs_mean_relative_bias = abs(mean_relative_bias)),
+    by = join_by(max_relative_bias == abs_mean_relative_bias, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, max_relative_bias, model_type)
+
+# Table format: minima (scenario 12)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 12) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    min_relative_bias = min(abs(mean_relative_bias))
+  ) %>% 
+  inner_join(
+    scenario_level_performance %>% mutate(abs_mean_relative_bias = abs(mean_relative_bias)),
+    by = join_by(min_relative_bias == abs_mean_relative_bias, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, min_relative_bias, model_type)
+    
+# Table format: maxima (scenario 12)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 12) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    max_relative_bias = max(abs(mean_relative_bias))
+  ) %>% 
+  inner_join(
+    scenario_level_performance %>% mutate(abs_mean_relative_bias = abs(mean_relative_bias)),
+    by = join_by(max_relative_bias == abs_mean_relative_bias, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, max_relative_bias, model_type)
+```
+
+## Standard Error / RMSE
+
+### Visualizations at Dataset Level
+
+```{r}
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = model_type, y = standard_error, color = metal)
+  ) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = model_type, y = standard_error)
+  ) + 
+  geom_boxplot() + 
+  facet_grid(scenario ~ metal) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = model_type, y = standard_error)
+  ) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = scenario, y = standard_error, color = model_type)
+  ) + 
+  geom_boxplot()
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = scenario, y = standard_error, color = model_type)
+  ) + 
+  geom_boxplot() + 
+  facet_grid(metal ~ .)
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = metal, y = standard_error, color = model_type)
+  ) + 
+  geom_boxplot() + 
+  facet_grid(scenario ~ .)
+```
+
+### Visualizations at Scenario Level
+
+```{r}
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = model_type, y = RMSE, color = metal)
+  ) + 
+  geom_point() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = model_type, y = RMSE)
+  ) + 
+  geom_point() + 
+  facet_grid(metal ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = metal, y = RMSE, color = model_type)
+  ) + 
+  geom_point() + 
+  facet_grid(. ~ scenario)
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = scenario, y = RMSE, color = model_type)
+  ) + 
+  geom_boxplot()
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = scenario, y = RMSE, color = model_type)
+  ) + 
+  geom_point() + 
+  facet_grid(metal ~ .)
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = metal, y = RMSE, color = model_type)
+  ) + 
+  geom_point() + 
+  facet_grid(scenario ~ .)
+```
+
+### Tables
+
+```{r}
+# Table format: minima (scenario 11)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 11) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    min_RMSE = min(RMSE)
+  ) %>% 
+  inner_join(
+    scenario_level_performance,
+    by = join_by(min_RMSE == RMSE, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, min_RMSE, model_type)
+    
+# Table format: maxima (scenario 11)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 11) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    max_RMSE = max(RMSE)
+  ) %>% 
+  inner_join(
+    scenario_level_performance,
+    by = join_by(max_RMSE == RMSE, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, max_RMSE, model_type)
+
+# Table format: minima (scenario 12)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 12) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    min_RMSE = min(RMSE)
+  ) %>% 
+  inner_join(
+    scenario_level_performance,
+    by = join_by(min_RMSE == RMSE, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, min_RMSE, model_type)
+    
+# Table format: maxima (scenario 12)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 12) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    max_RMSE = max(RMSE)
+  ) %>% 
+  inner_join(
+    scenario_level_performance,
+    by = join_by(max_RMSE == RMSE, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, max_RMSE, model_type)
+```
+
+## Coverage
+
+### Visualizations at Scenario Level
+
+```{r}
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = model_type, y = coverage, color = metal)
+  ) + 
+  geom_point() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = model_type, y = coverage)
+  ) + 
+  geom_point() + 
+  facet_grid(metal ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = metal, y = coverage, color = model_type)
+  ) + 
+  geom_point() + 
+  facet_grid(. ~ scenario)
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = scenario, y = coverage, color = model_type)
+  ) + 
+  geom_boxplot()
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = scenario, y = coverage, color = model_type)
+  ) + 
+  geom_point() + 
+  facet_grid(metal ~ .)
+
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = metal, y = coverage, color = model_type)
+  ) + 
+  geom_point() + 
+  facet_grid(scenario ~ .)
+```
+
+### Tables
+
+```{r}
+# Table format: minima (scenario 11)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 11) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    min_coverage = min(coverage)
+  ) %>% 
+  inner_join(
+    scenario_level_performance,
+    by = join_by(min_coverage == coverage, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, min_coverage, model_type)
+    
+# Table format: maxima (scenario 11)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 11) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    max_coverage = max(coverage)
+  ) %>% 
+  inner_join(
+    scenario_level_performance,
+    by = join_by(max_coverage == coverage, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, max_coverage, model_type)
+
+# Table format: minima (scenario 12)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 12) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    min_coverage = min(coverage)
+  ) %>% 
+  inner_join(
+    scenario_level_performance,
+    by = join_by(min_coverage == coverage, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, min_coverage, model_type)
+    
+# Table format: maxima (scenario 12)
+scenario_level_performance %>% 
+  filter(metal %in% c(1, 2, 3, 4, 5, 11), scenario == 12) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    max_coverage = max(coverage)
+  ) %>% 
+  inner_join(
+    scenario_level_performance,
+    by = join_by(max_coverage == coverage, scenario == scenario, metal == metal),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metal, max_coverage, model_type)
+```
+
+## Time
+
+```{r}
+dataset_level_performance %>% 
+  ggplot(
+    aes(x = model_type, y = time)
+  ) + 
+  geom_boxplot() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+dataset_level_performance %>% 
+  ggplot(
+    aes(x = model_type, y = time)
+  ) + 
+  geom_boxplot() + 
+  facet_grid(scenario ~ .) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+dataset_level_performance %>% 
+  ggplot(
+    aes(x = scenario, y = time, color = model_type)
+  ) + 
+  geom_boxplot()
+```
+
+### Visualizations at Scenario Level
+
+```{r}
+scenario_level_performance %>% 
+  ggplot(
+    aes(x = model_type, y = avg_time)
+  ) + 
+  geom_point() + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+scenario_level_performance %>% 
+  ggplot(
+    aes(x = scenario, y = avg_time, color = model_type)
+  ) + 
+  geom_point()
+```
+
+### Tables
+
+```{r}
+# Table format for min and max times
+scenario_level_performance %>% 
+  filter(metal == 1) %>% 
+  group_by(scenario) %>% 
+  summarize(
+    min_time = min(avg_time),
+    max_time = max(avg_time)
+  ) %>% 
+  pivot_longer(
+    min_time:max_time,
+    names_to = "metric"
+  ) %>% 
+  rename(
+    time = value
+  ) %>% 
+  inner_join(
+    scenario_level_performance,
+    by = join_by(time == avg_time, scenario == scenario),
+    multiple = "all"
+  ) %>% 
+  dplyr::select(scenario, metric, time, model_type) %>% 
+  distinct()
+```
+
+# Other Figures
+
+```{r}
+# Thinner boxplots by editing width parameter
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = model_type, y = relative_bias, color = metal)
+  ) + 
+  geom_boxplot(width = 0.05) + 
+  facet_grid(. ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+# Error bars instead of boxplots
+dataset_level_performance %>% 
+  filter(scenario == 11, metal %in% c(1:5, 11)) %>% 
+  dplyr::select(scenario, metal, relative_bias, model_type) %>% 
+  group_by(metal, model_type) %>% 
+  summarize(
+    mean_relative_bias = mean(relative_bias),
+    std_error = std.error(relative_bias),
+    lower = mean_relative_bias - 2*(std_error),
+    upper = mean_relative_bias + 2*(std_error)
+  ) %>% 
+  ggplot(aes(x = model_type, y = mean_relative_bias)) + 
+  geom_pointrange(aes(ymin = lower, ymax = upper)) + 
+  facet_grid(. ~ metal) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  dplyr::select(scenario, metal, relative_bias, model_type) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    mean_relative_bias = mean(relative_bias),
+    std_error = std.error(relative_bias),
+    lower = mean_relative_bias - 2*(std_error),
+    upper = mean_relative_bias + 2*(std_error)
+  ) %>% 
+  ggplot(aes(x = mean_relative_bias, y = model_type, color = scenario)) + 
+  geom_pointrange(aes(xmin = lower, xmax = upper)) + 
+  facet_wrap(. ~ metal)
+
+# Observed vs. predicted values
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  dplyr::select(scenario, metal, model_type, point_estimate, true_effect, relative_bias) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    median_point_estimate = median(point_estimate),
+    true_effect = median(true_effect),
+    median_relative_bias = median(relative_bias)
+  ) %>% 
+  ggplot(aes(x = true_effect, y = median_point_estimate, size = median_relative_bias)) + 
+  geom_point(aes(color = metal)) + 
+  facet_grid(model_type ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  dplyr::select(scenario, metal, model_type, point_estimate, true_effect, relative_bias) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    median_point_estimate = median(point_estimate),
+    true_effect = median(true_effect),
+    median_relative_bias = median(relative_bias)
+  ) %>% 
+  ggplot(aes(x = true_effect, y = median_point_estimate, color = model_type)) + 
+  geom_point() + 
+  facet_grid(metal ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+dataset_level_performance %>% 
+  filter(scenario == 11, metal %in% c(1:5, 11)) %>% 
+  dplyr::select(scenario, metal, model_type, point_estimate, true_effect, relative_bias) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    median_point_estimate = median(point_estimate),
+    true_effect = median(true_effect),
+    median_relative_bias = median(relative_bias)
+  ) %>% 
+  ggplot(aes(x = true_effect, y = median_point_estimate, color = model_type)) + 
+  geom_point() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+
+# Plots in ascending or descending order
+scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  ggplot(
+    aes(x = reorder(model_type, RMSE, fun = median), y = RMSE, color = model_type)
+  ) + 
+  geom_boxplot() +
+  facet_grid(metal ~ scenario) + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+```
+
+# Ensemble Development
+
+```{r}
+# Data frame with mean and median point estimates plus true effects per scenario/metal/model
+summary_point_estimate_data = dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    mean_point_estimate = mean(point_estimate),
+    median_point_estimate = median(point_estimate)
+  ) %>% 
+  inner_join(
+    true_effects %>% 
+    pivot_longer(
+    cols = 2:11,
+    names_to = "metal",
+    values_to = "true_effect"
+  ) %>% 
+  rbind(
+    true_effects_mixture %>% mutate(scenario = as.factor(scenario), true_effect = effect, metal = as.factor(11)) %>%
+      dplyr::select(scenario, metal, true_effect)
+  ),
+  by = join_by(scenario == scenario, metal == metal)
+  )
+```
+
+```{r}
+# Method 1: Weight models equally 
+summary_point_estimate_data %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    mean_of_means_across_models = mean(mean_point_estimate),
+    mean_of_medians_across_models = mean(median_point_estimate),
+    median_of_means_across_models = median(mean_point_estimate),
+    median_of_medians_across_models = median(median_point_estimate)
+  ) %>% 
+  mutate(
+    relative_bias_mean_means = (mean_of_means_across_models - true_effect) / true_effect,
+    relative_bias_mean_medians = (mean_of_medians_across_models - true_effect) / true_effect,
+    relative_bias_median_means = (median_of_means_across_models - true_effect) / true_effect,
+    relative_bias_median_medians = (median_of_medians_across_models - true_effect) / true_effect
+  ) %>% 
+  dplyr::select(scenario, metal, relative_bias_mean_means:relative_bias_median_medians)
+
+# Code to save for viz and tables
+# exploratory_ensemble = dataset_level_performance %>% 
+#   filter(metal %in% c(1:5, 11)) %>% 
+#   dplyr::select(scenario, dataset, metal, model_type, point_estimate, true_effect) %>% 
+#   group_by(scenario, metal, model_type) %>% 
+#   summarize(
+#     mean_point_estimate = mean(point_estimate), # Assume these are the outputs from evaluating a model on a single dataset
+#     median_point_estimate = median(point_estimate) # Later, can try random sampling of datasets and simulation
+#   ) %>% 
+#   group_by(scenario, metal) %>% 
+#   summarize(
+#     mean_of_means = mean(mean_point_estimate),
+#     median_of_means = median(mean_point_estimate),
+#     mean_of_medians = mean(median_point_estimate),
+#     median_of_medians = median(median_point_estimate)
+#   ) %>% 
+#   inner_join(
+#     true_effects %>% 
+#     pivot_longer(
+#     cols = 2:11,
+#     names_to = "metal",
+#     values_to = "true_effect"
+#   ) %>% 
+#   rbind(
+#     true_effects_mixture %>% mutate(scenario = as.factor(scenario), true_effect = effect, metal = as.factor(11)) %>%
+#       dplyr::select(scenario, metal, true_effect)
+#   ),
+#   by = join_by(scenario == scenario, metal == metal)
+#   ) %>% 
+#   mutate(
+#     mean_means_rel_bias = (mean_of_means - true_effect) / true_effect,
+#     median_means_rel_bias = (median_of_means - true_effect) / true_effect,
+#     mean_medians_rel_bias = (mean_of_medians - true_effect) / true_effect,
+#     median_medians_rel_bias = (median_of_medians - true_effect) / true_effect
+#   ) %>% 
+#   dplyr::select(scenario, metal, mean_means_rel_bias:median_medians_rel_bias) 
+# # %>% 
+#   # pivot_longer(
+#   #   cols = mean_means_rel_bias:median_medians_rel_bias,
+#   #   names_to = "metric",
+#   #   values_to = "relative_bias"
+#   # ) %>% 
+#   # ggplot(aes(x = metric, y = relative_bias)) + 
+#   # geom_point() +
+#   # facet_grid(scenario ~ metal) + 
+#   # theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) 
+# 
+# ensemble_check_df = rbind(
+#   scenario_level_performance %>% 
+#   filter(metal %in% c(1:5, 11)) %>% 
+#   mutate(
+#     relative_bias = median_relative_bias
+#   ) %>% 
+#   dplyr::select(scenario, metal, model_type, relative_bias),
+#   exploratory_ensemble %>% 
+#   pivot_longer(
+#     cols = mean_means_rel_bias:median_medians_rel_bias,
+#     names_to = "model_type",
+#     values_to = "relative_bias"
+#   ) %>% 
+#   mutate(
+#     scenario = as.factor(scenario),
+#     metal = as.factor(metal)
+#   )
+# )
+# 
+# ensemble_check_df %>% 
+#   ggplot(aes(x = metal, y = relative_bias, color = model_type)) + 
+#   geom_point() + 
+#   facet_grid(scenario ~ .)
+# 
+# ensemble_check_df %>% 
+#   filter(scenario == 11) %>% 
+#   group_by(scenario, metal) %>% 
+#   summarize(
+#     min_relative_bias = min(abs(relative_bias))
+#   ) %>% 
+#   inner_join(
+#     ensemble_check_df %>% mutate(abs_relative_bias = abs(relative_bias)),
+#     by = join_by(min_relative_bias == abs_relative_bias, scenario == scenario, metal == metal),
+#     multiple = "all"
+#   ) %>% 
+#   dplyr::select(scenario, metal, min_relative_bias, model_type)
+# 
+# ensemble_check_df %>% 
+#   filter(scenario == 12) %>% 
+#   group_by(scenario, metal) %>% 
+#   summarize(
+#     min_relative_bias = min(abs(relative_bias))
+#   ) %>% 
+#   inner_join(
+#     ensemble_check_df %>% mutate(abs_relative_bias = abs(relative_bias)),
+#     by = join_by(min_relative_bias == abs_relative_bias, scenario == scenario, metal == metal),
+#     multiple = "all"
+#   ) %>% 
+#   dplyr::select(scenario, metal, min_relative_bias, model_type)
+```
+
+```{r}
+# Method 2: Fit-based weighting
+
+# Based on estimate distance from point estimate for each parameter (using means)
+summary_point_estimate_data %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    mean_of_means = mean(mean_point_estimate)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    abs_difference_from_mean_across_models = abs(mean_point_estimate - mean_of_means),
+    inv_diff = 1 / abs_difference_from_mean_across_models
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    sum_inv_diff = sum(inv_diff)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    weight = inv_diff / sum_inv_diff,
+    weighted_point_estimate_per_model = weight * mean_point_estimate
+  ) %>% 
+  dplyr::select(scenario, metal, model_type, mean_point_estimate, true_effect, weighted_point_estimate_per_model) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    weighted_point_estimate = sum(weighted_point_estimate_per_model)
+  ) %>% 
+  mutate(
+    relative_bias = (weighted_point_estimate - true_effect) / true_effect
+  )
+
+# Based on estimate distance from point estimate for each parameter (using medians)
+summary_point_estimate_data %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    median_of_medians = median(median_point_estimate)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    abs_difference_from_median_across_models = abs(median_point_estimate - median_of_medians),
+    inv_diff = 1 / abs_difference_from_median_across_models
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    sum_inv_diff = sum(inv_diff)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    weight = inv_diff / sum_inv_diff,
+    weighted_point_estimate_per_model = weight * median_point_estimate
+  ) %>% 
+  dplyr::select(scenario, metal, model_type, median_point_estimate, true_effect, weighted_point_estimate_per_model) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    weighted_point_estimate = sum(weighted_point_estimate_per_model)
+  ) %>% 
+  mutate(
+    relative_bias = (weighted_point_estimate - true_effect) / true_effect
+  )
+
+# Based on estimate distance from point estimates across parameters (using means)
+summary_point_estimate_data %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    mean_of_means = mean(mean_point_estimate)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    abs_difference_from_mean_across_models = abs(mean_point_estimate - mean_of_means),
+  ) %>% 
+  group_by(scenario, model_type) %>% 
+  mutate(
+    sum_difference_per_model_across_params = sum(abs_difference_from_mean_across_models),
+    inv_diff = 1 / sum_difference_per_model_across_params
+  ) %>% 
+  ungroup() %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    sum_inv_diff = sum(inv_diff)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    weight = inv_diff / sum_inv_diff,
+    weighted_point_estimate_per_model = weight * mean_point_estimate
+  ) %>% 
+  dplyr::select(scenario, metal, model_type, mean_point_estimate, true_effect, weighted_point_estimate_per_model) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    weighted_point_estimate = sum(weighted_point_estimate_per_model)
+  ) %>% 
+  mutate(
+    relative_bias = (weighted_point_estimate - true_effect) / true_effect
+  )
+
+# Based on estimate distance from point estimates across parameters (using medians)
+summary_point_estimate_data %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    median_of_medians = median(median_point_estimate)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    abs_difference_from_median_across_models = abs(median_point_estimate - median_of_medians),
+  ) %>% 
+  group_by(scenario, model_type) %>% 
+  mutate(
+    sum_difference_per_model_across_params = sum(abs_difference_from_median_across_models),
+    inv_diff = 1 / sum_difference_per_model_across_params
+  ) %>% 
+  ungroup() %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    sum_inv_diff = sum(inv_diff)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    weight = inv_diff / sum_inv_diff,
+    weighted_point_estimate_per_model = weight * mean_point_estimate
+  ) %>% 
+  dplyr::select(scenario, metal, model_type, median_point_estimate, true_effect, weighted_point_estimate_per_model) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    weighted_point_estimate = sum(weighted_point_estimate_per_model)
+  ) %>% 
+  mutate(
+    relative_bias = (weighted_point_estimate - true_effect) / true_effect
+  )
+```
+
+```{r}
+# Method 3: Fit-based weights but only for a subset of models (e.g. top 3 or 5)
+
+summary_point_estimate_data %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    mean_of_means = mean(mean_point_estimate)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    abs_difference_from_mean_across_models = abs(mean_point_estimate - mean_of_means)
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    rank = rank(abs_difference_from_mean_across_models)
+  ) %>% 
+  filter(rank %in% c(1:3)) %>% 
+  ungroup() %>% 
+  mutate(
+    inv_diff = 1 / abs_difference_from_mean_across_models
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    sum_inv_diff = sum(inv_diff)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    weight = inv_diff / sum_inv_diff,
+    weighted_point_estimate_per_model = weight * mean_point_estimate
+  ) %>% 
+  dplyr::select(scenario, metal, model_type, mean_point_estimate, true_effect, weighted_point_estimate_per_model) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    weighted_point_estimate = sum(weighted_point_estimate_per_model)
+  ) %>% 
+  mutate(
+    relative_bias = (weighted_point_estimate - true_effect) / true_effect
+  )
+
+summary_point_estimate_data %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    mean_of_means = mean(mean_point_estimate)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    abs_difference_from_mean_across_models = abs(mean_point_estimate - mean_of_means)
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    rank = rank(abs_difference_from_mean_across_models)
+  ) %>% 
+  filter(rank %in% c(1:5)) %>% 
+  ungroup() %>% 
+  mutate(
+    inv_diff = 1 / abs_difference_from_mean_across_models
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    sum_inv_diff = sum(inv_diff)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    weight = inv_diff / sum_inv_diff,
+    weighted_point_estimate_per_model = weight * mean_point_estimate
+  ) %>% 
+  dplyr::select(scenario, metal, model_type, mean_point_estimate, true_effect, weighted_point_estimate_per_model) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    weighted_point_estimate = sum(weighted_point_estimate_per_model)
+  ) %>% 
+  mutate(
+    relative_bias = (weighted_point_estimate - true_effect) / true_effect
+  )
+  
+# Same as above, but instead of top 3, within a certain range of the mean of means
+
+summary_point_estimate_data %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    mean_of_means = mean(mean_point_estimate)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    abs_difference_from_mean_across_models = abs(mean_point_estimate - mean_of_means),
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    mean_difference = mean(abs_difference_from_mean_across_models),
+    sd_difference = sd(abs_difference_from_mean_across_models),
+    upper_bound = mean_difference + 0.5*sd_difference,
+    lower_bound = mean_difference - 0.5*sd_difference
+  ) %>% 
+  filter(
+    abs_difference_from_mean_across_models > lower_bound & abs_difference_from_mean_across_models < upper_bound
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    inv_diff = 1 / abs_difference_from_mean_across_models
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    sum_inv_diff = sum(inv_diff)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    weight = inv_diff / sum_inv_diff,
+    weighted_point_estimate_per_model = weight * mean_point_estimate
+  ) %>% 
+  dplyr::select(scenario, metal, model_type, mean_point_estimate, true_effect, weighted_point_estimate_per_model) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    weighted_point_estimate = sum(weighted_point_estimate_per_model)
+  ) %>% 
+  mutate(
+    relative_bias = (weighted_point_estimate - true_effect) / true_effect
+  )
+
+summary_point_estimate_data %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    mean_of_means = mean(mean_point_estimate)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    abs_difference_from_mean_across_models = abs(mean_point_estimate - mean_of_means),
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    mean_difference = mean(abs_difference_from_mean_across_models),
+    sd_difference = sd(abs_difference_from_mean_across_models),
+    upper_bound = mean_difference + sd_difference,
+    lower_bound = mean_difference - sd_difference
+  ) %>% 
+  filter(
+    abs_difference_from_mean_across_models > lower_bound & abs_difference_from_mean_across_models < upper_bound
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    inv_diff = 1 / abs_difference_from_mean_across_models
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  mutate(
+    sum_inv_diff = sum(inv_diff)
+  ) %>% 
+  ungroup() %>% 
+  mutate(
+    weight = inv_diff / sum_inv_diff,
+    weighted_point_estimate_per_model = weight * mean_point_estimate
+  ) %>% 
+  dplyr::select(scenario, metal, model_type, mean_point_estimate, true_effect, weighted_point_estimate_per_model) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    weighted_point_estimate = sum(weighted_point_estimate_per_model)
+  ) %>% 
+  mutate(
+    relative_bias = (weighted_point_estimate - true_effect) / true_effect
+  )
+
+# Note: considered using geometric mean from `psych` to see if it improves over arithmetic mean, but cannot use with negative values
+```
+
+# Appendix
+
+```{r}
+# Check how median relative bias generally compares for scenario 11 vs. 12
+dataset_level_performance %>% 
+  filter(metal %in% c(1,2,3,4,5)) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    median_relative_bias = median(relative_bias)
+  ) %>% 
+  ggplot(aes(x = model_type, y = median_relative_bias, color = scenario)) + 
+geom_point() + 
+  facet_grid(. ~ metal)  +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Median Relative Bias by Model and Metal, Colored by Scenario",
+       subtitle = "For Exposures in Functional Form (Metals 1-5)")
+```
+
+```{r}
+# What if we created fit-based weights based on RMSE?
+# Won't include because in reality, we won't know RMSE except from model training (rather than testing)
+RMSE_inv_totals = scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  dplyr::select(scenario, metal, model_type, RMSE) %>% 
+  mutate(
+    RMSE_inv = 1 / RMSE
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    RMSE_inv_sum = sum(RMSE_inv)
+  )
+
+weights = scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  dplyr::select(scenario, metal, model_type, RMSE) %>% 
+  mutate(
+    RMSE_inv = 1 / RMSE
+  ) %>% 
+  left_join(
+    RMSE_inv_totals,
+    by = join_by(scenario == scenario, metal == metal)
+  ) %>% 
+  mutate(
+    weight = RMSE_inv / RMSE_inv_sum
+  )
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  dplyr::select(scenario, dataset, metal, point_estimate, model_type, true_effect) %>% 
+  left_join(
+    weights,
+    by = join_by(scenario == scenario, metal == metal, model_type == model_type)
+  )  %>% 
+  mutate(
+    weighted_effect = point_estimate * weight
+  ) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    median_new_effect = median(weighted_effect)
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    weighted_avg_point_estimate = sum(median_new_effect)
+  ) %>% 
+  mutate(
+    relative_bias = (weighted_avg_point_estimate - true_effect) / true_effect
+  )
+```
+
+```{r}
+# What if we selected the 3 models that had lowest RMSE across metals in a scenario?
+RMSE_by_model = scenario_level_performance %>% 
+  group_by(scenario, model_type) %>% 
+  summarize(
+    RMSE_sum = sum(RMSE)
+  ) %>% 
+  group_by(scenario) %>%
+  mutate(rank = rank(RMSE_sum)) %>% 
+  filter(rank %in% c(1:3)) %>% 
+  dplyr::select(scenario, model_type)
+
+scenario_level_performance_filtered = scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  inner_join(
+    RMSE_by_model,
+    by = join_by(scenario == scenario, model_type == model_type)
+  )
+
+RMSE_inv_totals = scenario_level_performance_filtered %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  dplyr::select(scenario, metal, model_type, RMSE) %>% 
+  mutate(
+    RMSE_inv = 1 / RMSE
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    RMSE_inv_sum = sum(RMSE_inv)
+  )
+
+weights = scenario_level_performance_filtered %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  dplyr::select(scenario, metal, model_type, RMSE) %>% 
+  mutate(
+    RMSE_inv = 1 / RMSE
+  ) %>% 
+  left_join(
+    RMSE_inv_totals,
+    by = join_by(scenario == scenario, metal == metal)
+  ) %>% 
+  mutate(
+    weight = RMSE_inv / RMSE_inv_sum
+  )
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  dplyr::select(scenario, dataset, metal, point_estimate, model_type, true_effect) %>% 
+  inner_join(
+    weights,
+    by = join_by(scenario == scenario, metal == metal, model_type == model_type)
+  ) %>% 
+  mutate(
+    weighted_effect = point_estimate * weight
+  ) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    median_new_effect = median(weighted_effect)
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    weighted_avg_point_estimate = sum(median_new_effect)
+  ) %>% 
+  mutate(
+    relative_bias = (weighted_avg_point_estimate - true_effect) / true_effect
+  )
+```
+
+```{r}
+# For fit-based weights, what if we used absolute value of median relative bias rather than RMSE?
+# Again, don't observe bias in reality, so shouldn't weight based on this
+bias_inv_totals = scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  dplyr::select(scenario, metal, model_type, median_relative_bias) %>% 
+  mutate(
+    bias_inv = 1 / abs(median_relative_bias)
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    bias_inv_sum = sum(bias_inv)
+  )
+
+weights = scenario_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  dplyr::select(scenario, metal, model_type, median_relative_bias) %>% 
+  mutate(
+    bias_inv = 1 / abs(median_relative_bias)
+  ) %>% 
+  left_join(
+    bias_inv_totals,
+    by = join_by(scenario == scenario, metal == metal)
+  ) %>% 
+  mutate(
+    weight = bias_inv / bias_inv_sum
+  )
+
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  dplyr::select(scenario, dataset, metal, point_estimate, model_type, true_effect) %>% 
+  left_join(
+    weights,
+    by = join_by(scenario == scenario, metal == metal, model_type == model_type)
+  )  %>% 
+  mutate(
+    weighted_effect = point_estimate * weight
+  ) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    median_new_effect = median(weighted_effect)
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    weighted_avg_point_estimate = sum(median_new_effect)
+  ) %>% 
+  mutate(
+    relative_bias = (weighted_avg_point_estimate - true_effect) / true_effect
+  )
+```
+
+```{r}
+# Average estimates and bias across models
+dataset_level_performance %>% 
+  filter(metal %in% c(1:5, 11)) %>% 
+  group_by(scenario, metal, model_type) %>% 
+  summarize(
+    mean_point_estimate = mean(point_estimate),
+    median_point_estimate = median(point_estimate)
+  ) %>% 
+  inner_join(
+    true_effects %>% 
+    pivot_longer(
+    cols = 2:11,
+    names_to = "metal",
+    values_to = "true_effect"
+  ) %>% 
+  rbind(
+    true_effects_mixture %>% mutate(scenario = as.factor(scenario), true_effect = effect, metal = as.factor(11)) %>%
+      dplyr::select(scenario, metal, true_effect)
+  ),
+  by = join_by(scenario == scenario, metal == metal)
+  ) %>% 
+  group_by(scenario, metal) %>% 
+  summarize(
+    true_effect = mean(true_effect),
+    mean_point_estimate_all_models = mean(mean_point_estimate),
+    median_point_estimate_all_models = median(median_point_estimate)
+  ) %>% 
+  mutate(
+    mean_relative_bias = (mean_point_estimate_all_models - true_effect) / true_effect
+  )
+```
+

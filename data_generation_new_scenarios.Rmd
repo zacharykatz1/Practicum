@@ -1,0 +1,377 @@
+---
+title: "Data Generation: New Scenarios (11 and 12)"
+author: "Zachary Katz (UNI: zak2132)"
+date: "2023-03-25"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+# Load packages
+library(tidyverse)
+library(MASS)
+# library(corrplot)
+library(faux)
+# library(glmnet)
+# library(rsample)
+# library(caret)
+# library(earth)
+# library(BART)
+# library(ranger)
+# library(mgcv)
+# library(SuperLearner)
+# library(qgcomp)
+# library(grf)
+# library(amc)
+# library(remotes)
+# library(tmleCommunity) # Still in beta testing
+# library(bkmr)
+# library(patchwork)
+
+# To avoid annoying message
+options(dplyr.summarise.inform = FALSE)
+```
+
+# Generate data
+
+```{r}
+# Define parameters for data generation from Melanie (Strong Heart Study)
+
+mod_as_coefs = c(3.114051, 0.195914, -0.286263, -0.001533)
+
+mod_cd_coefs = c(1.149765, 0.492292, -0.601173, 0.003254, 0.175670)
+
+mod_mo_coefs = c(1.940379, 0.110234, 0.216759, 0.003825, 0.182579, 0.036503)
+
+mod_se_coefs = c(1.943348, 0.052137, 0.346080, 0.002652, 0.074087, 0.118370, 0.140823)
+
+mod_w_coefs = c(-3.192843, 0.091385, 0.064261, -0.001105, 0.302883, 0.097835, 0.385486, -0.265733)
+
+# Define functional forms for outcomes
+f_y11 = function(covariates){
+  
+  # Simple exposures, complex confounding, moderate collinearity
+  1 + 0.5*(covariates[, 1]) + 1*(covariates[, 2]) - 1.5*(covariates[, 3]) - 2.0*(covariates[, 4]) + 2.5*(covariates[, 5]) + 
+    (2*cos(covariates[, 11]))^2 + 0.25*(covariates[, 12]*covariates[, 13]) + 0.5*(exp(covariates[, 14]))^(0.5) + 0.75*(covariates[, 15])^2
+      
+}
+
+f_y12 = function(covariates){
+  
+  # Complex exposures, complex confounding, moderate collinearity
+  1 + 0.5*(covariates[, 1])^2 + 0.4*exp(covariates[, 2]) - exp(0.08*(covariates[, 3]*covariates[, 4])) - 0.2*(covariates[, 5])^3 + 0.5*((covariates[, 1])^2*covariates[, 5]) + 
+    (2*cos(covariates[, 11]))^2 + 0.25*(covariates[, 12]*covariates[, 13]) + 0.5*(exp(covariates[, 14]))^(0.5) + 0.75*(covariates[, 15])^2 + (covariates[, 15]*covariates[, 2])
+  
+}
+
+# Define function to generate data using Melanie's parameters
+data_simulation = function(scenario, N = 1000) {
+  
+  if (scenario %in% c(11, 12)){
+    
+    # Simulate confounders
+    sim_df = data.frame(
+      C1 = as.numeric(rbinom(N, 1, 0.5920088))
+    )
+    
+    # Correlated confounders C1 and C2
+    C2and3 = rnorm_multi(
+      n = N,
+      mu = c(3.394314, 56.12727),
+      sd = c(0.1934176, 8.102264),
+      r = 0.8,
+      varnames = c("C2", "C3"),
+      empirical = FALSE
+    )
+    
+    # Correlated noise (extra confounders)
+    C4and5 = rnorm_multi(
+      n = N,
+      mu = rep(x = 8, 2),
+      sd = rep(x = 3, 2),
+      r = 0.1,
+      varnames = c("C4", "C5"),
+      empirical = FALSE
+      
+    )
+    
+    sim_df$C2 = C2and3$C2
+    sim_df$C3 = C2and3$C3
+    sim_df$C4 = C4and5$C4
+    sim_df$C5 = C4and5$C5
+    
+    sim_df$M1 = model.matrix(~., sim_df) %*% c(mod_as_coefs, 0.05, 0.05) + 
+      rnorm(N, 0, 0.7090138) # Do I need to add confounding directly from C1, C2, C3, etc.?
+    
+    sim_df$M2 = model.matrix(~., sim_df) %*% c(mod_cd_coefs[1:4], 0.05, 0.05, mod_cd_coefs[5]) + 
+      rnorm(N, 0, 0.6891941)
+    
+    sim_df$M3 = model.matrix(~., sim_df) %*% c(mod_mo_coefs[1:4], 0.05, 0.05, mod_mo_coefs[5:6]) + 
+      rnorm(N, 0, 0.6150645)
+    
+    sim_df$M4 = model.matrix(~., sim_df) %*% c(mod_se_coefs[1:4], 0.05, 0.05, mod_se_coefs[5:7]) + 
+      rnorm(N, 0, 0.4512169)
+    
+    sim_df$M5 = model.matrix(~., sim_df) %*% c(mod_w_coefs[1:4], 0.05, 0.05, mod_w_coefs[5:8]) + 
+      rnorm(N, 0, 1.050844)
+    
+    sim_df$M6 = model.matrix(~., sim_df) %*% c(mod_w_coefs[1:4], 0.05, 0.05, mod_w_coefs[5:8], 0.12) + 
+      rnorm(N, 0, 0.65)
+    
+    sim_df$M7 = model.matrix(~., sim_df) %*% c(mod_se_coefs[1:4], 0.05, 0.05, mod_se_coefs[5:7], rep(0.1, 3)) + 
+      rnorm(N, 0, 0.65)
+    
+    sim_df$M8 = model.matrix(~., sim_df) %*% c(mod_mo_coefs[1:4], 0.05, 0.05, mod_mo_coefs[5:6], rep(0.07, 5)) + 
+      rnorm(N, 0, 0.65)
+    
+    sim_df$M9 = model.matrix(~., sim_df) %*% c(mod_cd_coefs[1:4], 0.05, 0.05, mod_cd_coefs[5], rep(0.05, 7)) + 
+      rnorm(N, 0, 0.65)
+    
+    sim_df$M10 = model.matrix(~., sim_df) %*% c(mod_as_coefs, 0.05, 0.05, rep(0.08, 9)) + 
+      rnorm(N, 0, 0.65)
+    
+    # Re-order columns
+    sim_df = sim_df %>% 
+      dplyr::select(M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, C1, C2, C3, C4, C5)
+    
+    if(scenario == 11){
+      
+      sim_df$hY = f_y11(sim_df)
+      
+    } else if (scenario == 12){
+      
+      sim_df$hY = f_y12(sim_df)
+      
+    }
+
+    # Add noise
+    epsY = rnorm(N, mean = 0, sd = 5)
+    sim_df$Y = with(sim_df, hY + epsY)
+
+    # Remove unused columns
+    sim_df = sim_df %>%
+      dplyr::select(-hY)
+    
+    # Return simulated data
+    return(sim_df)
+    
+  }
+
+}
+```
+
+```{r}
+# Function for functional forms
+functional_forms = function(scenario, covars){
+  
+  if(scenario == 11){
+    
+    a = f_y11(covars)
+    
+  }
+  
+  if(scenario == 12){
+    
+    a = f_y12(covars)
+    
+  }
+ 
+  return(a)   
+}
+```
+
+```{r}
+# Simulate M data sets of N observations for each scenario
+set.seed(2132)
+M = 1000 # number of data sets per scenario
+N = 1000 # number of observations per data set
+
+simulated_data = list()
+
+for (scenario in c(11,12)){
+  
+  simulated_data_loop = lapply(1:M, function(i) data_simulation(scenario = scenario, N = N))
+  
+  for (data_frame in 1:M){
+    
+    simulated_data_loop[[data_frame]]$scenario = scenario
+    
+  }
+  
+  simulated_data = append(simulated_data, simulated_data_loop)
+  
+}
+
+simulated_data_new = saveRDS(simulated_data, file = "~/Desktop/Columbia MS Biostatistics/Research/Valeri lab/Practicum/simulated_data_new.RDS")
+```
+
+# Estimands and true effects
+
+```{r}
+# First estimand of interest: effect of interquartile range change in exposure levels
+
+quantiles_new = data.frame()
+
+# For each scenario, simulate 1000 datasets with 1000 observations
+
+set.seed(2132)
+
+for (i in c(11, 12)){
+  
+  for (j in 1:1000){
+    
+    sim_data = data_simulation(scenario = i, N = 1000)
+    q1 = apply(sim_data, 2, function(x) quantile(x, 0.25))
+    med = apply(sim_data, 2, median)
+    q2 = apply(sim_data, 2, function(x) quantile(x, 0.75))
+    quantiles_new = bind_rows(
+      quantiles_new,
+      bind_cols(scenario = i, quantile = c(0.25, 0.50, 0.75),
+      bind_rows(q1, med, q2)
+      )
+    )
+    
+  }
+  
+}
+
+# For each scenario, average across datasets for each quantile of a given metal
+
+# Function for table
+metal_IQR_table = function(scenario_i, metal_j){
+  
+  # Average across datasets of each quantile for given metal in given scenario
+  m.25 = quantiles_new %>% 
+          filter(quantile == 0.25 & scenario == scenario_i) %>% 
+          dplyr::select(c(metal_j + 2)) %>% 
+          t() %>% 
+          mean()
+    
+  m.75 = quantiles_new %>% 
+          filter(quantile == 0.75 & scenario == scenario_i) %>% 
+          dplyr::select(c(metal_j + 2)) %>% 
+          t() %>% 
+          mean()
+  
+  # For interquartile range change
+  # Create tables with all vars at median except for given exposure to obtain potential outcomes (counterfactuals)
+  q1.m = apply(filter(quantiles_new, quantile == 0.5 & scenario == scenario_i), 2, mean)
+  q1.m[[c(metal_j + 2)]] = m.25
+  q2.m = q1.m
+  q2.m[[c(metal_j + 2)]] = m.75
+  
+  table = rbind(q1.m, q2.m) %>% as.data.frame() %>% dplyr::select(-scenario, -quantile)
+  
+  return(table)
+  
+}
+
+# Function for causal effect (difference in potential outcomes)
+metal_IQR_effect = function(scenario_i, metal_j){
+  
+  # Obtain metal IQR table
+  table = metal_IQR_table(scenario_i, metal_j)
+  
+  # Calculate true effect
+  true_effect = functional_forms(scenario_i, table[2, ]) - functional_forms(scenario_i, table[1, ])
+  
+  return(true_effect[[1]])
+  
+}
+```
+
+```{r}
+# Calculate true effects
+true_effects_new = data.frame()
+
+for (scenario_i in c(11, 12)){
+  
+  for (metal_j in 1:10){
+    
+    effect = metal_IQR_effect(scenario_i, metal_j)
+    true_effects_new = bind_rows(
+      true_effects_new,
+      bind_cols(scenario = scenario_i,
+                metal = metal_j,
+                effect = effect)
+    )
+    
+  }
+  
+}
+
+true_effects_new = true_effects_new %>% 
+  pivot_wider(
+    names_from = metal,
+    values_from = effect
+  )
+
+true_effects_new = saveRDS(true_effects_new, file = "true_effects_new.RDS")
+```
+
+```{r}
+# Repeat but for aggregate mixture profiles
+
+# Function for table
+metal_IQR_mix_table = function(scenario_i){
+  
+  # Average across datasets of each quantile for given metal in given scenario
+  m.25 = quantiles_new %>% 
+    filter(quantile == 0.25 & scenario == scenario_i) %>% 
+    dplyr::select(M1:M10)
+    
+  m.75 = quantiles_new %>% 
+    filter(quantile == 0.75 & scenario == scenario_i) %>% 
+    dplyr::select(M1:M10)
+  
+  c.50 = quantiles_new %>% 
+    filter(quantile == 0.50 & scenario == scenario_i) %>% 
+    dplyr::select(C1:C5)
+  
+  q.1.means = apply(m.25, 2, mean)
+  q.2.means = apply(m.75, 2, mean)
+  c.means = apply(c.50, 2, mean)
+  
+  table = rbind(q.1.means, q.2.means) %>% as.data.frame()
+  confound = rbind(c.means, c.means)
+  table = cbind(table, confound)
+  
+  return(table)
+  
+}
+
+# Function for causal effect with aggregate mixture profile
+metal_IQR_mix_effect = function(scenario_i){
+  
+  # Obtain metal IQR table
+  table = metal_IQR_mix_table(scenario_i)
+  
+  # Calculate true effect
+  true_effect = functional_forms(scenario_i, table[2, ]) - functional_forms(scenario_i, table[1, ])
+  
+  return(true_effect[[1]])
+  
+}
+
+# Calculate true effects
+true_effects_mixture_new = data.frame()
+
+for (scenario in c(11, 12)){
+    
+    effect = metal_IQR_mix_effect(scenario)
+    true_effects_mixture_new = bind_rows(
+      true_effects_mixture_new,
+      bind_cols(scenario = scenario,
+                effect = effect)
+    )
+  
+}
+
+true_effects_mixture_new = saveRDS(true_effects_mixture_new, file = "true_effects_mixture_new.RDS")
+```
+
+```{r}
+# Save last so quantiles data frame can be used above
+quantiles_new = saveRDS(quantiles_new, file = "quantiles_new.RDS")
+```

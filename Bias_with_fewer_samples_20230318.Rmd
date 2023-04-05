@@ -274,9 +274,14 @@ elastic_net_results_25boots_performance = model_performance_dataset_level(elasti
 
 draw_function = function(scenario_num, results, N) {
   
-  model_scen = results %>% filter(scenario == scenario_num & metal == 11)
-  
   set.seed(2132)
+  
+  # Select 200 random dataset indices
+  model_scen = results %>% filter(scenario == scenario_num) %>% dplyr::select(dataset) %>% unique() %>% sample(N)
+  
+  # Filter for random sample in results
+  sampled_datasets = results %>% filter(scenario == 11)
+  
   scen_indices = sample(1:nrow(model_scen), N)
   
   model_rows_sampled = model_scen[scen_indices, ]
